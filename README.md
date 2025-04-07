@@ -118,7 +118,7 @@ python src/training/train.py \
 Then, we use the pre-trained model for fine-tuning on the EFP task. Here, instead of using the model fine-tuned on the example dataset, we use a model that has been pre-trained on 5000 targets (deduplicated with prediction targets)
 ```shell
 python src/training/train_HistonTF.py \
-    --project_dir /home/hezj/projects/SUCCEED \
+    --project_dir /path/to/SUCCEED \
     --use_pth data/model/HistonTF_best_network.pth \
     --seed 1401 \
     --lr 0.001 \
@@ -139,7 +139,7 @@ python src/training/train_HistonTF.py \
 Testing on the test set
 ```shell
 python src/inference/prediction_HistonTF.py \
-    --project_dir /home/hezj/projects/SUCCEED \
+    --project_dir /path/to/SUCCEED \
     --use_pth data/model/HistonTF_best_network.pth \
     --model result/EFP/4-cells/model/HistonTF_best_network.pth \
     --seed 1401 \
@@ -153,18 +153,18 @@ python src/inference/prediction_HistonTF.py \
     --out_dir result/EFP/4-cells/model/csv/logs/version_0
 ```
 
-Inference on the new dataset
+## Inference on the new dataset
 ```shell
 python src/inference/inference_HistonTF.py \
-    --project_dir /home/hezj/projects/SUCCEED \
+    --project_dir /path/to/SUCCEED \
     --use_pth data/model/HistonTF_best_network.pth \
     --model result/EFP/4-cells/model/HistonTF_best_network.pth \
     --seed 1401 \
     --batch 8 \
     --seq_dir reference/dna_sequence \
-    --contig_bed data/EFP/1m_epcot_sequences.bed  \
     --atac_path data/EFP/atac \
     --atac_dict "A549.bigWig" \
     --name A549 \
+    --contig_bed data/EFP/1m_epcot_sequences.bed  \ # You can substitute the contig_bed with your own dataset
     --out_dir result/EFP/4-cells/model/csv/logs/version_0
 ```
