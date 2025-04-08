@@ -4,7 +4,6 @@ SUCCEED is a systematic evaluation framework across five genomic tasks that conf
 ![Main Figure](figure/main.png)
 ## Table of Contents
 - [SUCCEED](#succeed)
-  - [Table of Contents](#table-of-contents)
   - [Installation](#installation)
   - [1. Train from scratch](#1-train-from-scratch)
   - [2. Fine-tuning on new dataset](#2-fine-tuning-on-new-dataset)
