@@ -96,3 +96,38 @@ class EarlyStopping():
             }, path)
         # torch.save(model.state_dict(), path)	# 这里会存储迄今最优模型的参数
         self.val_loss_min = val_loss
+
+def compute_rowwise_pearson(y_true, y_pred):
+    """
+    逐行计算 Pearson 相关系数。
+    
+    Args:
+        y_true (torch.Tensor): 真实值，形状为 [N, D]。
+        y_pred (torch.Tensor): 预测值，形状为 [N, D]。
+    
+    Returns:
+        torch.Tensor: 每行的 Pearson 相关系数，形状为 [N]。
+    """
+    # 转换为浮点数
+    y_true = y_true.float()
+    y_pred = y_pred.float()
+    
+    # 每行计算均值
+    true_mean = torch.mean(y_true, dim=1, keepdim=True)
+    pred_mean = torch.mean(y_pred, dim=1, keepdim=True)
+    
+    # 每行计算协方差
+    covariance = torch.sum((y_true - true_mean) * (y_pred - pred_mean), dim=1)
+    
+    # 每行计算方差
+    true_var = torch.sum((y_true - true_mean) ** 2, dim=1)
+    pred_var = torch.sum((y_pred - pred_mean) ** 2, dim=1)
+    
+    # 防止除零
+    denominator = torch.sqrt(true_var) * torch.sqrt(pred_var)
+    denominator = torch.where(denominator > 1e-12, denominator, torch.tensor(float('inf')).to(denominator.device))
+    
+    # 计算 Pearson 相关系数
+    pearson_r = covariance / denominator
+    
+    return pearson_r

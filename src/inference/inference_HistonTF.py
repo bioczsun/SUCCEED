@@ -150,6 +150,8 @@ def evaluate(model, valid_data, device, out_dir):
     model.eval()
     prediction_ls = []
     chrom_ls = []
+    start_ls = []
+    end_ls = []
     with torch.no_grad():
         for idx, (seq, atac, chrom, start, end) in enumerate(valid_data):
             seq = seq.to(device).float().transpose(1, 2)
@@ -157,7 +159,11 @@ def evaluate(model, valid_data, device, out_dir):
             outputs = model(seq, atac)["num_classes"]  # Forward pass
             outputs = target_crop(outputs)
             prediction_ls.append(outputs.cpu().numpy())
-            chrom_ls.extend([chrom, start, end])
+            
+            chrom_ls.append(chrom)
+            start_ls.append(start)
+            end_ls.append(end)
+            
             if idx % 5 == 0:
                 valid_data.set_description(f"Inferring... [{idx}/{len(valid_data)}]")
             torch.cuda.empty_cache()
@@ -174,8 +180,12 @@ def evaluate(model, valid_data, device, out_dir):
     with h5py.File(out_dir, "w") as f:
         f.create_dataset("prediction", data=prediction_ls, dtype="float16")
     
-    # Save chromosome information
-    np.save(f"{out_dir_base}/contigs.npy", np.array(chrom_ls))
+    contigs_data = {
+        'chrom': chrom_ls,
+        'start': start_ls,
+        'end': end_ls
+    }
+    np.save(f"{out_dir_base}/contigs.npy", contigs_data)
     print("Done!!")
 
 

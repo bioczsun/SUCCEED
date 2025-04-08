@@ -9,7 +9,7 @@ git clone https://github.com/bioczsun/SUCCEED.git
 cd SUCCEED
 conda create -n succeed python=3.11.2 basenji
 conda activate succeed
-conda install tqdm einops==0.7.0
+conda install -c bioconda -c conda-forge tqdm einops==0.7.0 ucsc-bedgraphtobigwig
 # Install Pytorch 2.5.1 with CUDA 12.1
 pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
 pip install torchmetrics==0.11.4
@@ -20,10 +20,11 @@ python -c "import torch; print(torch.cuda.is_available())"
 # 1. Train from scratch
 Next, we use a simple example on a small dataset (5 targets) to demonstrate how to train the SUCCEED model.
 ## Data Preparation
-Prepare reference genome (hg38)
+Prepare reference genome (hg38 and hg19)
 ```shell
 cd SUCCEED
 mkdir -p reference && wget -O - https://hgdownload.cse.ucsc.edu/goldenpath/hg38/bigZips/hg38.fa.gz | gzip -d > reference/hg38.fa
+mkdir -p reference && wget -O - https://hgdownload.cse.ucsc.edu/goldenpath/hg19/bigZips/hg19.fa.gz | gzip -d > reference/hg19.fa
 ```
 Prepare a dataset that SUCCEED can read
 ```shell
@@ -167,4 +168,66 @@ python src/inference/inference_HistonTF.py \
     --name A549 \
     --contig_bed data/EFP/1m_epcot_sequences.bed  \ # You can substitute the contig_bed with your own dataset
     --out_dir result/EFP/4-cells/model/csv/logs/version_0
+```
+
+# 4. 表观基因组去噪与增强
+## Data Preparation
+We use the data from the AtacWorks paper to demonstrate the denoising and enhancement of chromatin accessibility data.
+
+For bulk dataset:
+```shell
+# Training dataset on 4 cell types
+for cell_type in "CD8-10" "Bcell-13" "CD4-9" "Nkcell-11"; do
+    python src/atacwork/atacwork_data.py \
+        --out_dir result/denoise/bulk/$cell_type \
+        --clean_file data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/train_data/clean_data/$cell_type.50000000.1.cutsites.smoothed.200.bw \
+        --noisy_file data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/train_data/noisy_data/$cell_type.200000.2.cutsites.smoothed.200.bw \
+        --peak_file data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/train_data/clean_data/$cell_type.50000000.1.cutsites.smoothed.200.3.narrowPeak \
+        --fasta_file reference/hg19.fa \
+        --gaps_file reference/hg19_gaps.bed \
+        --name "$cell_type" \
+        --restart
+done
+
+# Test dataset on erythroid
+python src/atacwork/atacwork_data.py \
+    --out_dir result/denoise/bulk/Erythro-15 \
+    --clean_file data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/clean_data/Erythro-15.50000000.1.cutsites.smoothed.200.bw \
+    --noisy_file data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/noisy_data/Erythro-15.200000.2.cutsites.smoothed.200.bw \
+    --peak_file data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/clean_data/Erythro-15.50000000.1.cutsites.smoothed.200.3.narrowPeak \
+    --fasta_file reference/hg19.fa \
+    --gaps_file reference/hg19_gaps.bed \
+    --name "Erythro-15" \
+    --restart
+
+# 制作peaks label bigwig文件
+tail -n +2 data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/clean_data/Erythro-15.50000000.1.cutsites.smoothed.200.3.narrowPeak | awk -F'\t' '{print $1 "\t" $2 "\t" $3 "\t" 1}' > data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/clean_data/peaks.bed
+
+bedGraphToBigWig data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/clean_data/peaks.bed reference/hg19.chrom.sizes data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/clean_data/peaks_label.bw
+```
+
+## Fine-tuning
+For bulk dataset:
+```shell
+# Training on 4 cell types (Optional)
+python src/atacwork/train_atacwork.py \
+    --project_dir /path/to/SUCCEED \
+    --name ATACwork \
+    --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
+    --batch 32 \
+    --lr 0.0001 \
+    --dataset_dir result/denoise/bulk \
+    --outpath result/denoise/bulk/train_model/ \
+    --cell_types "CD8-10" "Bcell-13" "CD4-9" "Nkcell-11"
+
+# Testing on erythroid
+python src/atacwork/test_atacwork.py \
+    --project_dir /home/hezj/projects/SUCCEED \
+    --name test_result \
+    --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
+    --model data/model/ATACwork_200000_best_network.pth \
+    --batch 32 \
+    --dataset_dir result/denoise/bulk \
+    --outpath result/denoise/bulk/test_results/ \
+    --cell_types "Erythro-15"
 ```

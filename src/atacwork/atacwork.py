@@ -7,8 +7,8 @@ import random
 import numpy as np
 import math
 from einops.layers.torch import Rearrange
-import sys
 from model.config import ModelArgs
+
 
 
 def set_random_seed(random_seed = 40):
@@ -21,7 +21,6 @@ def set_random_seed(random_seed = 40):
     torch.cuda.manual_seed_all(random_seed)
 
 set_random_seed(1314)
-
 
 
 #辅助函数
@@ -55,17 +54,18 @@ def ConvBlock(dim,dim_out = None, kernel_size = 1):
 
 ##---------------定义高效Transformer模块-------------------------------    
 class RMSNorm(nn.Module):
-    def __init__(self, args: ModelArgs):
+    def __init__(self, args: ModelArgs, device: str):
         super().__init__()
+        self.device = device
         self.eps = args.norm_eps
-        self.weight = nn.Parameter(torch.ones(args.dim))
+        self.weight = nn.Parameter(torch.ones(args.dim).to(self.device))
 
     def _norm(self,x):
-        return x * torch.rsqrt(torch.mean(x**2, dim=-1, keepdim=True) + self.eps)
+        return x * torch.rsqrt(torch.mean(x**2, dim=-1, keepdim=True) + self.eps).to(self.device)
     
     def forward(self, x):
-        output = self._norm(x.float()).type_as(x) * self.weight
-        return output
+        output = self._norm(x.float()).type_as(x)
+        return output * self.weight
     
 
 def precompute_freqs_cis(dim: int, seq_len: int, device: str, theta: float = 10000.0):
@@ -133,24 +133,19 @@ class GroupedQueryAttention(nn.Module):
         self.wk = nn.Linear(self.dim, self.n_kv_heads * self.head_dim, bias=False)
         self.wv = nn.Linear(self.dim, self.n_kv_heads * self.head_dim, bias=False)
         self.wo = nn.Linear(self.num_heads * self.head_dim, self.dim, bias=False)
-        # # 预计算旋转编码 (避免重复计算)
-        # self.register_buffer("freqs_cis", precompute_freqs_cis(self.head_dim, self.args.max_seq_len, "cpu"))
 
-    def forward(self, x: torch.Tensor):
-        bsz, seq_len, _ = x.shape
-        device = x.device
+    def forward(self, q: torch.Tensor,k: torch.Tensor,v: torch.Tensor):
+        bsz, seq_len, _ = q.shape
+        device = q.device
 
-        # 计算 Query, Key, Value
-        xq = self.wq(x).view(bsz, seq_len, self.num_heads, self.head_dim)
-        xk = self.wk(x).view(bsz, seq_len, self.n_kv_heads, self.head_dim)
-        xv = self.wv(x).view(bsz, seq_len, self.n_kv_heads, self.head_dim)
+        xq = self.wq(q).reshape(bsz, seq_len, self.num_heads, self.head_dim)
+        xk = self.wk(k).reshape(bsz, seq_len, self.n_kv_heads, self.head_dim)
+        xv = self.wv(v).reshape(bsz, seq_len, self.n_kv_heads, self.head_dim)
 
-        # 旋转位置编码 (RoPE)
         freqs_cis = precompute_freqs_cis(dim=self.head_dim, seq_len=self.args.max_seq_len, device=device) # type: ignore
-        # freqs_cis = self.freqs_cis[:seq_len].to(device)  # 确保 RoPE 计算的序列长度匹配当前 `seq_len`
+
         xq, xk = apply_rotary_emb(xq, xk, freqs_cis)
 
-        # 复制 K/V 以匹配 Q 的数量
         keys = repeat_kv(xk, self.repeat)
         values = repeat_kv(xv, self.repeat)
 
@@ -158,15 +153,15 @@ class GroupedQueryAttention(nn.Module):
         keys = keys.transpose(1, 2)
         values = values.transpose(1, 2)
 
-        # 计算注意力 (可选使用 `scaled_dot_product_attention` 提高效率)
         scores = torch.matmul(xq, keys.transpose(-2, -1)) / np.sqrt(self.head_dim)
-        attn_weights = F.softmax(scores, dim=-1)
+        scores = F.softmax(scores, dim=-1)
 
-        output = torch.matmul(attn_weights, values)
+        output = torch.matmul(scores, values)
 
-        # 还原形状 & 投影回 `dim`
-        output = output.transpose(1, 2).reshape(bsz, seq_len, -1)
-        return self.wo(output)
+        output = output.transpose(1, 2).contiguous().view(bsz, seq_len, -1)
+        output = self.wo(output)
+
+        return output
         
 
 # 如果键/值头的数量少于查询头,此函数使用所需的重复次数扩展键/值嵌入  
@@ -177,7 +172,7 @@ def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
     return x.unsqueeze(3).expand(bsz, seq_len, n_kv_heads, n_rep, head_dim).reshape(bsz, seq_len, n_kv_heads * n_rep, head_dim)
 
 class FeedForward(nn.Module):
-    def __init__(self, dim: int, hidden_dim: int, multiple_of: int, ffn_dim_multiplier: Optional[float]) -> None:
+    def __init__(self, dim: int, hidden_dim: int, multiple_of: int, ffn_dim_multiplier: Optional[float], device: str) -> None:
         super().__init__()
         # 模型嵌入维度
         self.dim = dim
@@ -187,9 +182,9 @@ class FeedForward(nn.Module):
         hidden_dim = multiple_of * ((hidden_dim + multiple_of - 1) // multiple_of)  # 确保 hidden_dim 是 multiple_of 的倍数
 
         # 定义隐藏层权重
-        self.w1 = nn.Linear(self.dim, hidden_dim, bias=False)
-        self.w2 = nn.Linear(hidden_dim, self.dim, bias=False)
-        self.w3 = nn.Linear(self.dim, hidden_dim, bias=False)
+        self.w1 = nn.Linear(self.dim, hidden_dim, bias=False, device=device)
+        self.w2 = nn.Linear(hidden_dim, self.dim, bias=False, device=device)
+        self.w3 = nn.Linear(self.dim, hidden_dim, bias=False, device=device)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.w2(F.silu(self.w1(x)) * self.w3(x))
@@ -201,28 +196,21 @@ class TransformerBlock(nn.Module):
         super().__init__()
         self.args = args
         #定义RMSNorm
-        self.attention_norm = RMSNorm(args)
+        self.attention_norm = RMSNorm(args,device=args.device)
         #初始化注意力
         self.attn = GroupedQueryAttention(args)
         #定义前馈网络的RMSNorm
-        self.ff_norm = RMSNorm(args)
+        self.ff_norm = RMSNorm(args,device=args.device)
         #初始化前馈网络
-        self.ffn = FeedForward(dim=args.dim, hidden_dim=args.multiple_of, multiple_of=args.multiple_of, ffn_dim_multiplier=args.ffn_dim_multiplier)
+        self.ffn = FeedForward(dim=args.dim, hidden_dim=args.multiple_of, multiple_of=args.multiple_of, ffn_dim_multiplier=args.ffn_dim_multiplier,device=args.device)
 
-    def forward(self, x: torch.Tensor):
-        # 残差连接 + 归一化 + 注意力层
-        residual = x
-        x = self.attention_norm(x)
-        x = self.attn(x)
-        x = x + residual  # 残差连接
-
-        # 残差连接 + 归一化 + 前馈网络
-        residual = x
-        x = self.ff_norm(x)
-        x = self.ffn(x)
-        x = x + residual  # 残差连接
-
-        return x
+    def forward(self, q: torch.Tensor,k: torch.Tensor,v: torch.Tensor):
+        xq = self.attention_norm(q)
+        xk = k
+        xv = v
+        h = q + self.attn(xq,xk,xv)
+        out = h + self.ffn(self.ff_norm(h))
+        return out
     
 ####--------------Transformer end---------------------
 
@@ -286,16 +274,15 @@ class TargetLengthCrop(nn.Module):
         # 裁剪输入张量并返回
         return x[:, trim:-trim]
 
-class Enformer(nn.Module):
-    def __init__(self, args: ModelArgs,return_emb=False):
+class EpiModel(nn.Module):
+    def __init__(self, args: ModelArgs):
         super().__init__()
         self.args = args
         self.dim = args.dim
         half_dim = self.dim // 2
         twice_dim = self.dim * 2
+        
         self.filter_size = 19
-        self.return_emb=return_emb
-
         
         # 创建 stem 卷积层
         self.stem = nn.Sequential(
@@ -304,7 +291,7 @@ class Enformer(nn.Module):
             Residual(ConvBlock(half_dim)),
             nn.MaxPool1d(8),
         )
-        ##对于131072，使用2,对于524k，使用4。其余分辨率皆用4
+
         # 创建卷积塔
         filter_list = exponential_linspace_int(half_dim, self.dim, num=args.num_downsamples, divisible_by=args.dim_divisible_by)
         filter_list = [half_dim, *filter_list]
@@ -322,8 +309,7 @@ class Enformer(nn.Module):
 
         self.avg_pool = nn.AdaptiveAvgPool1d(1024)
 
-        transformer = [TransformerBlock(args) for _ in range(args.depth)]
-        self.transformer = nn.Sequential(*transformer)
+        self.transformer = [TransformerBlock(args) for _ in range(args.depth)]
 
         # 目标裁剪
         self.target_length = args.target_seq_len
@@ -355,50 +341,216 @@ class Enformer(nn.Module):
         x = self.conv_tower(x)
         x = self.avg_pool(x)
         x = x.transpose(1, 2)
-        x = self.transformer(x)
-        if self.return_emb:
-            return x
-        x = self.crop_final(x)
+        for transformer in self.transformer:
+            emb = transformer(x,x,x) 
+        x = self.crop_final(emb)
         x = self.final_pointwise(x)
-        return {name: head(x) for name, head in self.heads.items()}
+        out = map_values(lambda fn: fn(x), self._heads)
+        return out,emb
+    
+#finall concat
+class ATACwork(nn.Module):
+    def __init__(self,args: ModelArgs):
+        super().__init__()
+
+        self.args = args
+        self.dim = args.dim
+        self.avgpool = nn.AdaptiveAvgPool1d(1024)
+        self.track_trunk = nn.Sequential(
+            nn.Conv1d(in_channels=1,out_channels=32,kernel_size=19,padding=9),
+            nn.BatchNorm1d(32),
+            nn.ReLU(),
+            nn.AvgPool1d(8),
+            
+            nn.Conv1d(in_channels=32,out_channels=64,kernel_size=5,padding=2),
+            nn.BatchNorm1d(64),
+            nn.ReLU(),
+            nn.AvgPool1d(4),
+
+            nn.Conv1d(in_channels=64,out_channels=128,kernel_size=3,padding=1),
+            nn.BatchNorm1d(128),
+            nn.ReLU(),
+            nn.AvgPool1d(2), 
+
+            nn.Conv1d(in_channels=128,out_channels=256,kernel_size=3,padding=1),
+            nn.BatchNorm1d(256),
+            nn.ReLU(),
+            nn.AvgPool1d(2),      
+        )
+        self.CNN_linear = nn.Linear(256,256)
+        self.concat_linear = nn.Linear(512,256)
+        self.transformer_blocks = nn.ModuleList([TransformerBlock(args) for _ in range(1)])
+
+        # 最终逐点卷积
+        self.final_pointwise = nn.Sequential(
+            Rearrange('b n d -> b d n'),
+            ConvBlock(256, 512, 1),
+            Rearrange('b d n -> b n d'),
+            nn.Dropout(0.1),
+            nn.ReLU()
+        )
+        self.target_length = args.target_seq_len
+
+        self.final_dense = nn.Sequential(
+            Rearrange('b n d -> b d n'),
+            ConvBlock(512, 1, 1),
+            Rearrange('b d n -> b n d'),
+            nn.Softplus()
+        )
+
+        self.peak_dense = nn.Sequential(
+            Rearrange('b n d -> b d n'),
+            ConvBlock(512, 1, 1),
+            Rearrange('b d n -> b n d'),
+            nn.Sigmoid()
+        )
+
+        # self.final_dense = nn.Sequential(
+        #     Rearrange('b n d -> b d n'),
+        #     ConvBlock(512, 1, 1),
+        #     Rearrange('b d n -> b n d'),
+        #     nn.Softplus()
+        # )
+
+        # self.peak_dense = nn.Sequential(
+        #     Rearrange('b n d -> b d n'),
+        #     ConvBlock(512, 1, 1),
+        #     Rearrange('b d n -> b n d'),
+        #     nn.Sigmoid()
+        # )
+
+
+    @property
+    def heads(self):
+        return self._heads
+
+    def forward(self,x,emb):
+        mean_x = self.avgpool(x)
+        mean = mean_x.squeeze(1)
+        # mean_x = mean_x.transpose(1,2)
+        # 使用循环手动传递 mem
+        x = self.track_trunk(x)
+        x = x.transpose(1,2)
+        # x = self.CNN_linear(x)
+        x = torch.cat([x,emb],dim=2)
+        x = self.concat_linear(x)
+        for block in self.transformer_blocks:
+            x = block(x,x,x)
+        x = self.final_pointwise(x)
+        out = self.final_dense(x)
+        out = out.squeeze(-1)
+        peak = self.peak_dense(x)
+        peak = peak.squeeze(-1)
+        return out,peak,mean
+
+# model = ATACwork(ModelArgs())
+# a = torch.randn(2,1,131072)
+# b = torch.randn(2,1024,256)
+
+# out = model(a,b)
+# print(out[0].shape)
+# print(out[1].shape)
+
+# class ResidualBlock1D(nn.Module):
+#     def __init__(self, in_channels, out_channels, stride=1, downsample=None):
+#         super(ResidualBlock1D, self).__init__()
+#         self.conv1 = nn.Conv1d(in_channels, out_channels, kernel_size=3, stride=stride, padding=1, bias=False)
+#         self.bn1 = nn.BatchNorm1d(out_channels)
+#         self.relu = nn.ReLU(inplace=True)
+#         self.conv2 = nn.Conv1d(out_channels, out_channels, kernel_size=3, padding=1, bias=False)
+#         self.bn2 = nn.BatchNorm1d(out_channels)
+#         self.downsample = downsample
+
+#     def forward(self, x):
+#         identity = x
+
+#         out = self.conv1(x)
+#         out = self.bn1(out)
+#         out = self.relu(out)
+
+#         out = self.conv2(out)
+#         out = self.bn2(out)
+
+#         # 如果需要下采样，则对输入进行下采样
+#         if self.downsample is not None:
+#             identity = self.downsample(x)
+
+#         out += identity  # 残差连接
+#         out = self.relu(out)
+
+#         return out
+
+# class ResNetLike1D(nn.Module):
+#     def __init__(self, num_classes=1024):
+#         super(ResNetLike1D, self).__init__()
+
+#         # 全局平均池化
+#         self.avgpool = nn.AdaptiveAvgPool1d(1024)
+
+#         # 初始卷积层
+#         self.conv1 = nn.Conv1d(in_channels=1, out_channels=32, kernel_size=11, padding=5)
+#         self.bn1 = nn.BatchNorm1d(32)
+#         self.relu = nn.ReLU(inplace=True)
+#         self.avgpool1 = nn.AvgPool1d(kernel_size=8)
+
+#         # 残差块 1
+#         self.res_block1 = self._make_residual_block(32, 64, stride=1)
+#         self.avgpool2 = nn.AvgPool1d(kernel_size=4)
+
+#         # 残差块 2
+#         self.res_block2 = self._make_residual_block(64, 128, stride=1)
+#         self.avgpool3 = nn.AvgPool1d(kernel_size=2)
+
+#         # 残差块 3
+#         self.res_block3 = self._make_residual_block(128, 64, stride=1)
+#         self.avgpool4 = nn.AvgPool1d(kernel_size=2)
+
+#         # 全局平均池化和全连接层
+#         self.fc = nn.Sequential(
+#             nn.Linear(1024*64, num_classes),
+#             nn.Softmax(dim=1)
+#         )
+
+#         self.fc2 = nn.Sequential(
+#             nn.Linear(1024*64, num_classes),
+#             nn.Softmax(dim=1)
+#         )
+
+#     def _make_residual_block(self, in_channels, out_channels, stride):
+#         downsample = None
+#         if stride != 1 or in_channels != out_channels:
+#             downsample = nn.Sequential(
+#                 nn.Conv1d(in_channels, out_channels, kernel_size=1, stride=stride, bias=False),
+#                 nn.BatchNorm1d(out_channels),
+#             )
+#         return ResidualBlock1D(in_channels, out_channels, stride, downsample)
+
+#     def forward(self, x,emd):
+#         mean = self.avgpool(x)
+#         mean = mean.squeeze(1)
+#         # 初始卷积层
+#         x = self.conv1(x)
+#         x = self.bn1(x)
+#         x = self.relu(x)
+#         x = self.avgpool1(x)
+
+#         # 残差块 1
+#         x = self.res_block1(x)
+#         x = self.avgpool2(x)
+
+#         # 残差块 2
+#         x = self.res_block2(x)
+#         x = self.avgpool3(x)
+
+#         # 残差块 3
+#         x = self.res_block3(x)
+#         x = self.avgpool4(x)
+#         x = x.transpose(1, 2)
+#         # 全局平均池化和全连接层
+#         x = torch.flatten(x, 1)
+#         out1 = self.fc(x)
+#         out2 = self.fc2(x)
+
+#         return out1,out2,mean
     
 
-
-# for name, param in model.named_parameters():
-#     if 'head' in name:
-#         param.requires_grad = True
-#     else:
-#         param.requires_grad = False
-
-# trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-# non_trainable_params = sum(p.numel() for p in model.parameters() if not p.requires_grad)
-
-# print(f"Trainable parameters: {trainable_params}")
-# print(f"Non-trainable parameters: {non_trainable_params}")
-
-# # print(model)
-# output = model(a)
-# print(output["human"])
-# np.savez('/home/suncz/work/s02/Basenji2/Figure/Results/1/emb.npz',emb=emb.cpu().detach().numpy())
-# 冻结除了final_pointwise以外的所有层
-
-
-# # 验证冻结的参数
-# for name, param in model.named_parameters():
-#     print(f"Layer: {name}, requires_grad: {param.requires_grad}")
-
-# print(model)
-# output = model(a)
-# print(output.shape)
-
-
-
-
-
-
-
-
-
-
-
-            
