@@ -1,38 +1,72 @@
 # SUCCEED
-Deep learning methods based on DNA sequences have become an important tool for parsing multilevel regulatory mechanisms in genomes. These methods significantly improve the efficiency of identifying pathogenic genetic variants in genome-wide association studies (GWAS) by integrating artificial intelligence technologies with high-throughput functional genomic data. However, it remains challenging to precisely establish the mapping relationship between DNA sequences and complex epigenetic modifications. The Enformer model developed by David R. Kelley's team achieves accurate prediction from sequences to various epigenomic features by introducing long-range interaction mechanisms. This supervised learning framework innovatively combines the local feature extraction capabilities of one-dimensional convolutional neural networks with the global sequence modeling advantages of the Transformer architecture, achieving prediction accuracy significantly superior to traditional pure convolutional models and local window models.
+SUCCEED is a systematic evaluation framework across five genomic tasks that confirms Enformer's reproducibility and versatility. SUCCEED demonstrates stable predictive performance across diverse datasets and resolutions, enhances cell-type-specific epigenetic modification predictions, improves chromatin accessibility data quality, and excels at predicting 3D chromatin interactions from limited scATAC-seq data. These findings establish a foundation for unified multi-omics computational analysis.
 
-We systematically evaluated the reproducibility of the Enformer model and its reusability in five different genomic tasks. To verify the model's reproducibility, our model retrained based on 6,389 epigenomic profiles demonstrated stable predictive performance and fine-tuning potential on new datasets and under different resolution conditions. Additionally, by developing new representation transfer strategies, we proved that the model can not only accurately predict cell-type-specific epigenetic modifications but also effectively improve the signal-to-noise ratio of chromatin accessibility data. Notably, when predicting cell-type-specific 3D chromatin interaction maps, Enformer significantly outperforms existing benchmark methods, and the model only requires a small number of scATAC-seq cells to accurately predict cell-type-specific 3D chromatin structures. These results suggest that the Enformer model, by integrating sequence features and epigenetic information, demonstrates excellent predictive capabilities in multiple genomics tasks. Our research lays a solid foundation for building a unified computational framework for multi-omics analysis.
+![Main Figure](figure/main.png)
+## Table of Contents
+- [SUCCEED](#succeed)
+  - [Table of Contents](#table-of-contents)
+  - [Installation](#installation)
+  - [1. Train from scratch](#1-train-from-scratch)
+  - [2. Fine-tuning on new dataset](#2-fine-tuning-on-new-dataset)
+  - [3. Epigenomic feature prediction (EFP)](#3-epigenomic-feature-prediction-efp)
+  - [4. Denoising and enhancement of epigenomics data](#4-denoising-and-enhancement-of-epigenomics-data)
+  - [5. Cell-type-specific prediction of 3D chromatin organization](#5-cell-type-specific-prediction-of-3d-chromatin-organization)
 
-## Dependencies and Installation
+## Installation
+
+### Prerequisites
+- Python 3.11.2
+- CUDA 12.1 compatible GPU
+- Conda package manager
+
+### Step 1: Clone Repository
 ```shell
 git clone https://github.com/bioczsun/SUCCEED.git
 cd SUCCEED
+```
+
+### Step 2: Create Conda Environment
+```shell
 conda create -n succeed python=3.11.2 basenji
 conda activate succeed
-conda install -c bioconda -c conda-forge tqdm einops==0.7.0 ucsc-bedgraphtobigwig
-# Install Pytorch 2.5.1 with CUDA 12.1
+```
+
+### Step 3: Install Dependencies
+```shell
+# Install PyTorch 2.5.1 with CUDA 12.1
 pip install torch==2.5.1 torchvision==0.20.1 torchaudio==2.5.1 --index-url https://download.pytorch.org/whl/cu121
+
+# Install additional dependencies
+conda install -c bioconda -c conda-forge tqdm einops==0.7.0 ucsc-bedgraphtobigwig
 pip install torchmetrics==0.11.4
-# Check if PyTorch is installed successfully and can access GPU
+```
+
+### Step 4: Verify Installation
+```shell
 python -c "import torch; print(torch.cuda.is_available())"
 ```
 
-# 1. Train from scratch
-Next, we use a simple example on a small dataset (5 targets) to demonstrate how to train the SUCCEED model.
-## Data Preparation
-Prepare reference genome (hg38 and hg19)
+---
+
+## 1. Train from scratch
+We use a simple example on a small dataset (5 targets) to demonstrate how to train the SUCCEED model.
+
+### Data Preparation
+
+#### Step 1: Prepare Reference Genome
 ```shell
 cd SUCCEED
 mkdir -p reference && wget -O - https://hgdownload.cse.ucsc.edu/goldenpath/hg38/bigZips/hg38.fa.gz | gzip -d > reference/hg38.fa
 mkdir -p reference && wget -O - https://hgdownload.cse.ucsc.edu/goldenpath/hg19/bigZips/hg19.fa.gz | gzip -d > reference/hg19.fa
 ```
-Prepare a dataset that SUCCEED can read
+
+#### Step 2: Prepare Dataset
 ```shell
 conda activate succeed
 
 # We referenced basenji's approach to dataset preparation, using hg38.fa as the reference genome
 python src/preprocess/basenji_data.py -s 1 -g reference/hg38_gap.bed \
-    -l 131072 --local -o "training/131k-128" -p 48 -t .1 -v .1 -w 128 \
+    -l 131072 --local -o "result/training/131k-128" -p 48 -t .1 -v .1 -w 128 \
     -b reference/hg38-blacklist.v2.bed reference/hg38.fa src/preprocess/target.txt
 
 python src/preprocess/prepare_succeed_dataset.py \
@@ -41,10 +75,11 @@ python src/preprocess/prepare_succeed_dataset.py \
     --num_targets 5 \
     --output_dir result/training/131k-128
 ```
-## Pre-training
+
+### Pre-training a 131k-128bp model
 ```shell
 python src/training/train.py \
-    --project_dir /path/to/SUCCEED \
+    --project_dir /home/hezj/projects/SUCCEED \
     --output_head_size 5 \
     --td result/training/131k-128/train_all.h5 \
     --vd result/training/131k-128/valid_all.h5 \
@@ -55,15 +90,18 @@ python src/training/train.py \
     --out_dir result/training/131k-128/model
 ```
 
+---
 
-# 2. Fine-tuning on new dataset
-Next, we use the fully pre-trained model 131k-128bp on the complete dataset (6,389 targets) to fine-tune a new dataset with different resolution (we still use the small dataset with 5 targets for testing), using 524k-512bp as an example.
-## Download pre-trained model
+## 2. Fine-tuning on new dataset
+Next, we use the fully pre-trained 131k-128bp model on the complete dataset (6,389 targets) to fine-tune a new dataset with different resolution (we still use the small dataset with 5 targets for testing), using 524k-512bp as an example.
+
+### Download pre-trained model
 Coming soon
-## Data Preparation for 524k-512bp model
+
+### Data Preparation
 ```shell
 python src/preprocess/basenji_data.py -s 1 -g reference/hg38_gap.bed \
-    --break 7864320 -l 524288 --local -o "training/524k-512" -p 48 -t .1 -v .1 -w 512 \
+    --break 7864320 -l 524288 --local -o "result/training/524k-512" -p 48 -t .1 -v .1 -w 512 \
     -b reference/hg38-blacklist.v2.bed reference/hg38.fa src/preprocess/target.txt
 
 python src/preprocess/prepare_succeed_dataset.py \
@@ -72,10 +110,11 @@ python src/preprocess/prepare_succeed_dataset.py \
     --num_targets 5 \
     --output_dir result/training/524k-512
 ```
-## Fine-tuning
+
+### Fine-tuning a 524k-512bp model
 ```shell
 python src/training/train.py \
-    --project_dir /path/to/SUCCEED \
+    --project_dir /home/hezj/projects/SUCCEED \
     --output_head_size 5 \
     --td result/training/524k-512/train_all.h5 \
     --vd result/training/524k-512/valid_all.h5 \
@@ -87,12 +126,16 @@ python src/training/train.py \
     --out_dir result/training/524k-512/model
 ```
 
-# 3. Epigenomic feature prediction (EFP)
-## Data Preparation
-First, we need to prepare a dataset with input length of 1,048,576 (1M) and resolution of 1024bp, for pre-training the 1M-1024bp SUCCEED model
+---
+
+## 3. Epigenomic feature prediction (EFP)
+
+### Data Preparation
+
+#### Step 1: Prepare Pre-training Dataset
 ```shell
 python src/preprocess/basenji_data.py -s 1 -g reference/hg38_gap.bed \
-    --break 7864320 -l 1048576 --local -o "training/1m-1024" -p 48 -t .1 -v .1 -w 1024 \
+    --break 7864320 -l 1048576 --local -o "result/training/1m-1024" -p 48 -t .1 -v .1 -w 1024 \
     -b reference/hg38-blacklist.v2.bed reference/hg38.fa src/preprocess/target.txt
 
 python src/preprocess/prepare_succeed_dataset.py \
@@ -101,26 +144,37 @@ python src/preprocess/prepare_succeed_dataset.py \
     --num_targets 5 \
     --output_dir result/training/1m-1024
 ```
-Next, we prepare the dataset for the EFP task
+
+#### Step 2: Prepare EFP Dataset
 ```shell
-Coming soon
+mkdir -p reference/dna_sequence
+
+CHROMS=$(seq 1 22 | awk '{print "chr"$0}'; echo "chrX"; echo "chrY")
+
+for chrom in ${CHROMS}; do
+  samtools faidx reference/hg38.fa "${chrom}" | gzip > "reference/dna_sequence/${chrom}.fa.gz"
+done
+
+# The rest of the code will be available soon
 ```
-## Pre-training
+
+### Pre-training a 1M-1024bp model
 ```shell
 python src/training/train.py \
-    --project_dir /path/to/SUCCEED \
+    --project_dir /home/hezj/projects/SUCCEED \
     --output_head_size 5 \
     --td result/training/1m-1024/train_all.h5 \
     --vd result/training/1m-1024/valid_all.h5 \
-    --name HistonTF \
+    --name 1M \
     --out_dir result/training/1m-1024/model
 ```
-## Fine-tuning
-Then, we use the pre-trained model for fine-tuning on the EFP task. Here, instead of using the model fine-tuned on the example dataset, we use a model that has been pre-trained on 5000 targets (deduplicated with prediction targets)
+
+### Fine-tuning for EFP task
 ```shell
+# Training on 4 ATAC-seq datasets (Optional)
 python src/training/train_HistonTF.py \
-    --project_dir /path/to/SUCCEED \
-    --use_pth data/model/HistonTF_best_network.pth \
+    --project_dir /home/hezj/projects/SUCCEED \
+    --use_pth data/model/1M_best_network.pth \
     --seed 1401 \
     --lr 0.001 \
     --batch 8 \
@@ -137,12 +191,12 @@ python src/training/train_HistonTF.py \
     --out_dir result/EFP/4-cells/model
 ```
 
-Testing on the test set
+### Testing on the test set
 ```shell
 python src/inference/prediction_HistonTF.py \
-    --project_dir /path/to/SUCCEED \
-    --use_pth data/model/HistonTF_best_network.pth \
-    --model result/EFP/4-cells/model/HistonTF_best_network.pth \
+    --project_dir /home/hezj/projects/SUCCEED \
+    --use_pth data/model/1M_best_network.pth \
+    --model data/model/HistonTF_best_network.pth \
     --seed 1401 \
     --batch 8 \
     --seq_dir reference/dna_sequence \
@@ -154,27 +208,30 @@ python src/inference/prediction_HistonTF.py \
     --out_dir result/EFP/4-cells/model/csv/logs/version_0
 ```
 
-## Inference on the new dataset
+### Inference on the new dataset
 ```shell
+# You can substitute the contig_bed with your own dataset
 python src/inference/inference_HistonTF.py \
-    --project_dir /path/to/SUCCEED \
-    --use_pth data/model/HistonTF_best_network.pth \
-    --model result/EFP/4-cells/model/HistonTF_best_network.pth \
+    --project_dir /home/hezj/projects/SUCCEED \
+    --use_pth data/model/1M_best_network.pth \
+    --model data/model/HistonTF_best_network.pth \
     --seed 1401 \
     --batch 8 \
     --seq_dir reference/dna_sequence \
     --atac_path data/EFP/atac \
     --atac_dict "A549.bigWig" \
     --name A549 \
-    --contig_bed data/EFP/1m_epcot_sequences.bed  \ # You can substitute the contig_bed with your own dataset
+    --contig_bed data/EFP/1m_epcot_sequences.bed  \
     --out_dir result/EFP/4-cells/model/csv/logs/version_0
 ```
 
-# 4. 表观基因组去噪与增强
-## Data Preparation
-We use the data from the AtacWorks paper to demonstrate the denoising and enhancement of chromatin accessibility data.
+---
 
-For bulk dataset:
+## 4. Denoising and enhancement of epigenomics data
+
+### Data Preparation
+
+#### Bulk Dataset
 ```shell
 # Training dataset on 4 cell types
 for cell_type in "CD8-10" "Bcell-13" "CD4-9" "Nkcell-11"; do
@@ -200,21 +257,66 @@ python src/atacwork/atacwork_data.py \
     --name "Erythro-15" \
     --restart
 
-# 制作peaks label bigwig文件
+# Make peaks label bigwig file
 tail -n +2 data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/clean_data/Erythro-15.50000000.1.cutsites.smoothed.200.3.narrowPeak | awk -F'\t' '{print $1 "\t" $2 "\t" $3 "\t" 1}' > data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/clean_data/peaks.bed
 
 bedGraphToBigWig data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/clean_data/peaks.bed reference/hg19.chrom.sizes data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/clean_data/peaks_label.bw
 ```
 
-## Fine-tuning
-For bulk dataset:
+#### Single-cell Dataset
+```shell
+# Training dataset on 2 cell types. Test dataset on NK
+
+# Bcells
+for i in $(seq 1 5); do
+    python src/atacwork/atacwork_data_sc.py \
+        --out_dir result/denoise/sc/Bcells \
+        --clean_file data/denoise/self-dsc_blood_cell/Bcells/dsc.CD19.cutsites.clean1.bw \
+        --noisy_file data/denoise/self-dsc_blood_cell/Bcells/50cells/noisy/dsc.CD19.cutsites.$i.noisy$i.bw \
+        --peak_file data/denoise/self-dsc_blood_cell/Bcells/dsc.CD19.cutsites.clean.narrowPeak \
+        --fasta_file reference/hg19.fa \
+        --gaps_file reference/hg19_gaps.bed \
+        --name "Bcells_$i" \
+        --restart
+done
+
+# Mono
+for i in $(seq 1 5); do
+    python src/atacwork/atacwork_data_sc.py \
+        --out_dir result/denoise/sc/Mono \
+        --clean_file data/denoise/self-dsc_blood_cell/Mono/dsc.mono.cutsites.clean1.bw \
+        --noisy_file data/denoise/self-dsc_blood_cell/Mono/50cells/noisy/dsc.mono.cutsites.$i.noisy$i.bw \
+        --peak_file data/denoise/self-dsc_blood_cell/Mono/dsc.mono.cutsites.clean.narrowPeak \
+        --fasta_file reference/hg19.fa \
+        --gaps_file reference/hg19_gaps.bed \
+        --name "Mono_$i" \
+        --restart
+done
+
+# NK
+for i in $(seq 1 5); do
+    python src/atacwork/atacwork_data_sc.py \
+        --out_dir result/denoise/sc/NK \
+        --clean_file data/denoise/self-dsc_blood_cell/NK/dsc.NK.cutsites.clean1.bw \
+        --noisy_file data/denoise/self-dsc_blood_cell/NK/50cells/noisy/dsc.NK.cutsites.$i.noisy$i.bw \
+        --peak_file data/denoise/self-dsc_blood_cell/NK/dsc.NK.cutsites.clean.narrowPeak \
+        --fasta_file reference/hg19.fa \
+        --gaps_file reference/hg19_gaps.bed \
+        --name "NK_$i" \
+        --restart
+done
+```
+
+### Fine-tuning
+
+#### Bulk Dataset
 ```shell
 # Training on 4 cell types (Optional)
 python src/atacwork/train_atacwork.py \
-    --project_dir /path/to/SUCCEED \
+    --project_dir /home/hezj/projects/SUCCEED \
     --name ATACwork \
     --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
-    --batch 32 \
+    --batch 64 \
     --lr 0.0001 \
     --dataset_dir result/denoise/bulk \
     --outpath result/denoise/bulk/train_model/ \
@@ -226,8 +328,202 @@ python src/atacwork/test_atacwork.py \
     --name test_result \
     --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
     --model data/model/ATACwork_200000_best_network.pth \
-    --batch 32 \
+    --batch 64 \
     --dataset_dir result/denoise/bulk \
     --outpath result/denoise/bulk/test_results/ \
     --cell_types "Erythro-15"
+```
+
+#### Single-cell Dataset
+```shell
+# Training on 2 cell types (Optional)
+python src/atacwork/train_atacwork.py \
+    --project_dir /home/hezj/projects/SUCCEED \
+    --name ATACwork \
+    --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
+    --batch 64 \
+    --lr 0.0001 \
+    --dataset_dir result/denoise/sc \
+    --outpath result/denoise/sc/train_model/ \
+    --cell_types "Bcells" "Mono"
+
+# Testing on NK
+python src/atacwork/test_atacwork.py \
+    --project_dir /home/hezj/projects/SUCCEED \
+    --name test_result \
+    --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
+    --model data/model/ATACwork_max_50_best_network.pth \
+    --batch 64 \
+    --dataset_dir result/denoise/sc \
+    --outpath result/denoise/sc/test_results/ \
+    --cell_types "NK"
+```
+
+### Inference on the new dataset
+
+#### Bulk Dataset
+```shell
+python src/atacwork/inference_atacwork.py \
+    --project_dir /home/hezj/projects/SUCCEED \
+    --fasta reference/hg19.fa \
+    --model data/model/ATACwork_200000_best_network.pth \
+    --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
+    --noisy_file data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/noisy_data/Erythro-15.200000.2.cutsites.smoothed.200.bw \
+    --gaps_file reference/hg19_gaps.bed \
+    --name "erythroid_whole" \
+    --outpath result/denoise/bulk/test_results/ \
+    --limit_chrom all \
+    --chrom_size reference/hg19.chrom.sizes
+```
+
+#### Single-cell Dataset
+```shell
+for i in $(seq 1 5); do
+    python src/atacwork/inference_atacwork.py \
+        --project_dir /home/hezj/projects/SUCCEED \
+        --fasta reference/hg19.fa \
+        --model data/model/ATACwork_max_50_best_network.pth \
+        --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
+        --noisy_file data/denoise/self-dsc_blood_cell/NK/50cells/noisy/dsc.NK.cutsites.$i.noisy$i.bw \
+        --gaps_file reference/hg19_gaps.bed \
+        --name "NK_${i}_whole" \
+        --outpath result/denoise/sc/test_results/ \
+        --limit_chrom all \
+        --chrom_size reference/hg19.chrom.sizes
+done
+```
+
+---
+
+## 5. Cell-type-specific prediction of 3D chromatin organization
+
+### Data Preparation
+We refer to the preprocess pipeline from the C.Origami paper to demonstrate the cell-type-specific prediction of 3D chromatin organization.
+
+Using the IMR-90 cell line as an example, we need to prepare four types of data inputs:
+
+1. DNA sequence
+2. Hi-C
+3. ATAC-seq
+4. CTCF ChIP-seq
+
+#### DNA sequence
+```shell
+mkdir -p result/3d_genome/data/hg38/dna_sequence
+cp reference/centrotelo.bed result/3d_genome/data/hg38
+
+CHROMS=$(seq 1 22 | awk '{print "chr"$0}'; echo "chrX"; echo "chrY")
+
+for chrom in ${CHROMS}; do
+  samtools faidx reference/hg38.fa "${chrom}" | gzip > "result/3d_genome/data/hg38/dna_sequence/${chrom}.fa.gz"
+done
+```
+
+#### Hi-C
+```shell
+mkdir -p result/3d_genome/data/hg38/IMR-90
+
+# Download Hi-C data
+wget -O result/3d_genome/data/hg38/IMR-90/IMR-90_HiC.mcool https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/b4939d95-4121-4f86-9cc8-29a34eb834ef/4DNFIJTOIGOI.mcool
+
+# Convert cool to npy
+python -u src/corigami/preprocessing/cool2npy.py \
+    --no-balance \
+    result/3d_genome/data/hg38/IMR-90/IMR-90_HiC.mcool::/resolutions/10000 \
+    result/3d_genome/data/hg38/IMR-90/hic_matrix
+```
+
+#### ATAC-seq
+```shell
+mkdir -p result/3d_genome/data/hg38/IMR-90/genomic_features
+
+# Download ATAC-seq data
+wget -O result/3d_genome/data/hg38/IMR-90/genomic_features/IMR-90_ATAC.bam https://www.encodeproject.org/files/ENCFF848XMR/@@download/ENCFF848XMR.bam
+
+# Preprocess ATAC-seq data
+bash src/corigami/preprocessing/preprocess_atac.sh result/3d_genome/data/hg38/IMR-90/IMR-90_ATAC.bam
+```
+
+#### CTCF ChIP-seq
+```shell
+# Download CTCF ChIP-seq data
+wget -O result/3d_genome/data/hg38/IMR-90/genomic_features/ctcf.bw https://www.encodeproject.org/files/ENCFF256DUS/@@download/ENCFF256DUS.bigWig
+```
+
+### Fine-tuning a 2M-8192bp model based on the 131k-128bp model (Optional)
+```shell
+python src/preprocess/basenji_data.py -s 1 -g reference/hg38_gap.bed \
+    --break 7864320 -l 2097152 --local -o "result/training/2m-8192" -p 48 -t .1 -v .1 -w 8192 \
+    -b reference/hg38-blacklist.v2.bed reference/hg38.fa src/preprocess/target.txt
+
+python src/preprocess/prepare_succeed_dataset.py \
+    --fasta reference/hg38.fa \
+    --bed result/training/2m-8192/sequences.bed \
+    --num_targets 5 \
+    --output_dir result/training/2m-8192
+
+python src/training/train.py \
+    --project_dir /home/hezj/projects/SUCCEED \
+    --output_head_size 5 \
+    --td result/training/2m-8192/train_all.h5 \
+    --vd result/training/2m-8192/valid_all.h5 \
+    --seed 1401 \
+    --lr 0.001 \
+    --batch 8 \
+    --name 2m_131k_weight \
+    --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
+    --out_dir result/training/2m-8192/model
+```
+
+### Fine-tuning a 3D chromatin organization prediction model based on the 2M-8192bp model
+
+#### Install external dependencies
+```shell
+conda activate succeed
+
+pip install lightning==1.9.5
+pip install pytorch_lightning==1.9.5
+pip install lightning-bolts==0.7.0
+```
+
+#### Fine-tuning
+
+##### Bulk dataset
+```shell
+python src/3d_genome/bulk/corigami/training/main.py \
+    --project_dir /home/hezj/projects/SUCCEED \
+    --use_pth data/model/2m_131k_corr_weight_best_network.pth \
+    --seed 2077 \
+    --save_path result/3d_genome/training/IMR-90_bulk \
+    --data-root result/3d_genome/data \
+    --assembly hg38 \
+    --celltype IMR-90 \
+    --model-type ConvTransModel \
+    --patience 80 \
+    --max-epochs 80 \
+    --save-top-n 20 \
+    --num-gpu 0 \
+    --batch-size 4 \
+    --num-workers 16
+```
+
+##### Single-cell dataset
+```shell
+cp -r data/3d_genome/IMR-90_sc result/3d_genome/data/hg38 # Copy preprocessed data
+
+python src/3d_genome/sc/corigami/training/main.py \
+    --project_dir /home/hezj/projects/SUCCEED \
+    --use_pth data/model/2m_131k_corr_weight_best_network.pth \
+    --seed 2077 \
+    --save_path result/3d_genome/training/IMR-90_sc \
+    --data-root result/3d_genome/data \
+    --assembly hg38 \
+    --celltype IMR-90_sc \
+    --model-type ConvTransModel \
+    --patience 80 \
+    --max-epochs 80 \
+    --save-top-n 20 \
+    --num-gpu 0 \
+    --batch-size 4 \
+    --num-workers 16
 ```

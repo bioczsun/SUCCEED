@@ -6,11 +6,13 @@ catboost_info/
 __pycache__/
 *.py[cod]
 *$py.class
-/reference
+hg38.fa
+hg19.fa
+dna_sequence/
 /result
 # C extensions
 *.so
-
+*.log
 # Distribution / packaging
 .Python
 build/

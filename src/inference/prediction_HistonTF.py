@@ -151,8 +151,8 @@ def evaluate(model, valid_data, loss_fn, corr_coef, device, out_dir):
     label_ls = []
     chrom_ls = []
     with torch.no_grad():
-        corr_coef.reset()
         for idx, (seq, atac, target, label, chrom) in enumerate(valid_data):
+            corr_coef.reset()
             seq = seq.to(device).float().transpose(1, 2)
             atac = atac.to(device).float().unsqueeze(1)
             target = target.to(device)

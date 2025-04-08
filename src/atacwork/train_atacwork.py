@@ -73,20 +73,22 @@ def set_random_seed(random_seed = 40):
 set_random_seed(args.seed)
 
 class EpiDataset(Dataset):
-    def __init__(self, data_files, augment=False, train=True):
+    def __init__(self, data_files, train=True):
         self.data_files = data_files
-        self.augment = augment
         self.train = train
 
-        self.data_index_ranges = []  # index range list
-        self.atac_index_ranges = []
         self.cumulative_lengths = [0]  # cumulative lengths
+        self.file_handles = []  # 存储打开的文件句柄
 
         # Calculate length and range for each file
         for data_file in self.data_files:
-            with h5py.File(data_file, 'r') as d:
-                length = len(d['sequence'])  # Get sequence length
-                self.cumulative_lengths.append(self.cumulative_lengths[-1] + length)
+            # 打开文件并保存句柄
+            h5_file = h5py.File(data_file, 'r')
+            self.file_handles.append(h5_file)
+            
+            # 获取文件长度
+            length = len(h5_file['sequence'])
+            self.cumulative_lengths.append(self.cumulative_lengths[-1] + length)
 
     def __len__(self):
         return self.cumulative_lengths[-1]  # Total length is the last cumulative length
@@ -102,18 +104,26 @@ class EpiDataset(Dataset):
     def __getitem__(self, idx):
         # Locate specific file and line number
         file_idx, file_index = self.locate_file_and_index(idx)
-        data_file = self.data_files[file_idx]
-
+        
+        # 使用已打开的文件句柄直接读取数据
+        h5_file = self.file_handles[file_idx]
+        
         # Read data from file
-        with h5py.File(data_file, 'r') as d:
-            seq = d['sequence'][file_index]
-            clean = d['clean'][file_index]
-            noisy = d['noisy'][file_index]
-            label = d['label'][file_index]
+        seq = h5_file['sequence'][file_index]
+        clean = h5_file['clean'][file_index]
+        noisy = h5_file['noisy'][file_index]
+        label = h5_file['label'][file_index]
         
         return torch.Tensor(seq), torch.Tensor(clean), torch.Tensor(noisy), torch.Tensor(label)
-
     
+    def __del__(self):
+        # 关闭所有打开的文件句柄
+        for handle in self.file_handles:
+            try:
+                handle.close()
+            except:
+                pass
+
 # define train and val data    
 batch_size = int(args.batch)
 epochs = int(args.epoch)
@@ -202,7 +212,9 @@ train_dataset = EpiDataset(
 train_loader = DataLoader(
     train_dataset,
     batch_size=batch_size,
-    shuffle=False
+    shuffle=False,  
+    num_workers=4,  # 使用多进程加载数据
+    pin_memory=True  # 加速GPU训练
 )
 
 val_dataset = EpiDataset(
@@ -213,7 +225,9 @@ val_dataset = EpiDataset(
 val_loader = DataLoader(
     val_dataset,
     batch_size=batch_size,
-    shuffle=False
+    shuffle=False,
+    num_workers=4,
+    pin_memory=True
 )
 # val_dataset = EpiDataset(val_data,atac_data=val_atac_data,augment=False,train=False)
 # val_loader = DataLoader(val_dataset,batch_size=batch_size,shuffle=False,num_workers=20,pin_memory=True,persistent_workers=True)

@@ -1,3 +1,46 @@
+"""
+python src/atacwork/inference_atacwork.py \
+    --project_dir /path/to/SUCCEED \
+    --fasta /path/to/reference.fa \
+    --chrom_size /path/to/chrom.sizes \
+    --noisy_file /path/to/input.bw \
+    --gaps_file /path/to/gaps.bed \
+    --limit_chrom chr1 \
+    --name inference_run \
+    --use_pth /path/to/enformer_model.pth \
+    --model /path/to/atacwork_model.pth \
+    --device cuda:0 \
+    --outpath /path/to/output \
+    --batch 64
+"""
+import sys
+import argparse
+
+# Parse command line arguments
+def parse_arguments():
+    params = argparse.ArgumentParser(description='inference model')
+    params.add_argument("--project_dir",help="project dir",required=True)
+    params.add_argument("--fasta",help="fasta",required=True)
+    params.add_argument("--chrom_size",help="chrom_size",required=True)
+    params.add_argument('--noisy_file', type=str, help='Path to the noisy BigWig file')
+    params.add_argument("--limit_bed", type=str, help="Path to the limit bed file")
+    params.add_argument("--limit_chrom", type=str, help="limit chromosome")
+    params.add_argument("--gaps_file", type=str, help="Path to the gaps file")
+    params.add_argument("--name",help="model name",required=True)
+    params.add_argument("--restart", action="store_true")
+    params.add_argument("--seed",help="random seed",default=1401,type=int)
+    params.add_argument("--use_pth",help="model file",required=False)
+    params.add_argument("--model",help="optimizer file",required=False)
+    params.add_argument("--device",help="device cuda",default="cuda")
+    params.add_argument("--outpath",help="model name")
+    params.add_argument("--batch", type=int, help="batch size", default=32)
+    return params.parse_args()
+
+# Parse arguments and add path before importing other modules
+args = parse_arguments()
+project_dir = args.project_dir
+sys.path.append(project_dir + '/src')
+
 import subprocess
 import torch
 import torch.nn as nn
@@ -12,28 +55,10 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-
 from model.Enformer import Enformer
 from model.config import ModelArgs
 from training.metric import EarlyStopping, compute_rowwise_pearson
 import atacwork
-
-import argparse
-params = argparse.ArgumentParser(description='inference model')
-params.add_argument("--fasta",help="fasta",required=True)
-params.add_argument("--chrom_size",help="chrom_size",required=True)
-params.add_argument('--noisy_file', type=str, help='Path to the noisy BigWig file')
-params.add_argument("--limit_bed", type=str, help="Path to the limit bed file")
-params.add_argument("--limit_chrom", type=str, help="limit chromosome")
-params.add_argument("--gaps_file", type=str, help="Path to the gaps file")
-params.add_argument("--name",help="model name",required=True)
-params.add_argument("--restart", action="store_true")
-params.add_argument("--seed",help="random seed",default=1401)
-params.add_argument("--model_epi",help="model file",required=False)
-params.add_argument("--model",help="optimizer file",required=False)
-params.add_argument("--device",help="device cuda",default="cuda:1")
-params.add_argument("--outpath",help="model name")
-args = params.parse_args()
 
 config_args = ModelArgs()
 
@@ -59,7 +84,7 @@ def run_data_preprocessing(args):
     else:
         print("Running data preprocessing...")
         command = [
-            "python", "src/atacwork/atacwork_data_inference.py",
+            "python", f"{args.project_dir}/src/atacwork/atacwork_data_inference.py",
             "--noisy_file", args.noisy_file,
             "--fasta_file", args.fasta,
             "--gaps_file", args.gaps_file,
@@ -107,25 +132,21 @@ def run_bed_to_bigwig(bedGraph_file,type):
 class EpiDataset(Dataset):
     def __init__(self, data_files):
         self.data_files = data_files
-
+        self.h5_file = h5py.File(data_files, 'r')
+        self.sequences = self.h5_file['sequence']
+        self.noisy = self.h5_file['noisy']
 
     def __len__(self):
-        with h5py.File(self.data_files, 'r') as d:
-            return len(d['sequence']) # type: ignore
+        return len(self.sequences)
 
     def __getitem__(self, idx):
-        # Read data from file
-        with h5py.File(self.data_files, 'r') as d:
-            seq = d['sequence'][idx] # type: ignore
-            noisy = d['noisy'][idx] # type: ignore
+        # 直接使用已打开的文件句柄
+        seq = self.sequences[idx]
+        noisy = self.noisy[idx]
         return torch.Tensor(seq), torch.Tensor(noisy)
 
-
-
-
-    
 # define train and val data    
-batch_size = 32
+batch_size = args.batch
 device = args.device if torch.cuda.is_available() else "cpu"
 
 
@@ -138,7 +159,7 @@ model_epi = Enformer(config_args, return_emb=True)
 model_epi.to(device)
 
 
-checkpoint = torch.load(args.model_epi,map_location="cpu",weights_only=True)
+checkpoint = torch.load(args.use_pth,map_location="cpu",weights_only=True)
 model_epi.load_state_dict(checkpoint['model_state_dict'])
 model_epi.to(device)
 

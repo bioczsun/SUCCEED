@@ -37,7 +37,7 @@ import torch
 import torch.nn as nn
 import torch.multiprocessing as mp
 from torch.utils.data import Dataset, DataLoader
-from torchmetrics import AUROC
+from torchmetrics import AveragePrecision
 import random
 import h5py
 import numpy as np
@@ -61,17 +61,22 @@ def set_random_seed(random_seed=40):
 set_random_seed(args.seed)
 
 class EpiDataset(Dataset):
-    def __init__(self, data_files, train=False):
+    def __init__(self, data_files, train=True):
         self.data_files = data_files
         self.train = train
 
         self.cumulative_lengths = [0]  # cumulative lengths
+        self.file_handles = []  # 存储打开的文件句柄
 
         # Calculate length and range for each file
         for data_file in self.data_files:
-            with h5py.File(data_file, 'r') as d:
-                length = len(d['sequence'])  # Get sequence length
-                self.cumulative_lengths.append(self.cumulative_lengths[-1] + length)
+            # 打开文件并保存句柄
+            h5_file = h5py.File(data_file, 'r')
+            self.file_handles.append(h5_file)
+            
+            # 获取文件长度
+            length = len(h5_file['sequence'])
+            self.cumulative_lengths.append(self.cumulative_lengths[-1] + length)
 
     def __len__(self):
         return self.cumulative_lengths[-1]  # Total length is the last cumulative length
@@ -87,16 +92,18 @@ class EpiDataset(Dataset):
     def __getitem__(self, idx):
         # Locate specific file and line number
         file_idx, file_index = self.locate_file_and_index(idx)
-        data_file = self.data_files[file_idx]
-
+        
+        # 使用已打开的文件句柄直接读取数据
+        h5_file = self.file_handles[file_idx]
+        
         # Read data from file
-        with h5py.File(data_file, 'r') as d:
-            seq = d['sequence'][file_index]
-            clean = d['clean'][file_index]
-            noisy = d['noisy'][file_index]
-            label = d['label'][file_index]
+        seq = h5_file['sequence'][file_index]
+        clean = h5_file['clean'][file_index]
+        noisy = h5_file['noisy'][file_index]
+        label = h5_file['label'][file_index]
         
         return torch.Tensor(seq), torch.Tensor(clean), torch.Tensor(noisy), torch.Tensor(label)
+    
 
 def evaluate(model, val_loader):
     model.eval()
@@ -104,7 +111,7 @@ def evaluate(model, val_loader):
     total_loss = 0
     total_r = 0
     tmp_r = 0
-    total_auroc = 0
+    total_auprc = 0
     par = tqdm(val_loader, bar_format='{l_bar}{n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}')
     
     true_signal = []
@@ -135,7 +142,7 @@ def evaluate(model, val_loader):
             
             r_val = compute_rowwise_pearson(signal, target).mean()
             r_val_tmp = compute_rowwise_pearson(target, origin_mean).mean()
-            auroc_val = auroc(peak.detach(), label.detach().long())
+            auprc_val = auprc(peak.detach(), label.detach().long())
             
             loss_mse = loss_fn(signal, target)
             loss_binary = loss_bce(peak, label)
@@ -144,14 +151,14 @@ def evaluate(model, val_loader):
             total_loss += loss.item()
             total_r += r_val
             tmp_r += r_val_tmp
-            total_auroc += auroc_val
+            total_auprc += auprc_val
             
-            par.set_description(f"Test --> Loss_mse {loss_mse.item():.3f} Loss_bce {loss_binary.item():.3f} R {r_val:.3f} auc {auroc_val:.3f}", refresh=True)
+            par.set_description(f"Test --> Loss_mse {loss_mse.item():.3f} Loss_bce {loss_binary.item():.3f} R {r_val:.3f} AUPRC {auprc_val:.3f}", refresh=True)
             
         avg_loss = total_loss / len(val_loader)
         avg_r = total_r / len(val_loader)
         avg_tmp_r = tmp_r / len(val_loader)
-        avg_auroc = total_auroc / len(val_loader)
+        avg_auprc = total_auprc / len(val_loader)
 
         true_signal = np.concatenate(true_signal, axis=0)
         pred_signal = np.concatenate(pred_signal, axis=0)
@@ -168,10 +175,10 @@ def evaluate(model, val_loader):
                 true_peak=true_peak, 
                 pred_peak=pred_peak)
         
-        return avg_loss, avg_r, avg_auroc, avg_tmp_r
+        return avg_loss, avg_r, avg_auprc, avg_tmp_r
 
 def main():
-    global device, model_epi, model, loss_fn, loss_bce, auroc
+    global device, model_epi, model, loss_fn, loss_bce, auprc
     
     # Setup device
     device = args.device if torch.cuda.is_available() else "cpu"
@@ -201,7 +208,7 @@ def main():
     # Create loss functions
     loss_fn = nn.MSELoss()
     loss_bce = nn.BCELoss()
-    auroc = AUROC(task='multilabel', num_labels=1024).to(device)
+    auprc = AveragePrecision(task='multilabel', num_labels=1024).to(device)
     
     # Prepare test data
     dataset_dir = Path(args.dataset_dir)
@@ -231,8 +238,8 @@ def main():
     )
     
     # Evaluate model
-    test_loss, test_r, test_auroc, test_tmp_r = evaluate(model, test_loader)
-    print(f"Test Loss: {test_loss:.3f} R: {test_r:.3f} Auroc: {test_auroc:.3f} tmp_r: {test_tmp_r:.3f}")
+    test_loss, test_r, test_auprc, test_tmp_r = evaluate(model, test_loader)
+    print(f"Test Loss: {test_loss:.3f} R: {test_r:.3f} AUPRC: {test_auprc:.3f} tmp_r: {test_tmp_r:.3f}")
 
 if __name__ == "__main__":
     main()
