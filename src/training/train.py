@@ -124,11 +124,11 @@ def main():
 
     model.to(device)
 
-    for name, param in model.named_parameters():
-        if "_heads" in name:
-            param.requires_grad = True
-        else:
-            param.requires_grad = False
+    # for name, param in model.named_parameters():
+    #     if "_heads" in name:
+    #         param.requires_grad = True
+    #     else:
+    #         param.requires_grad = False
 
     ## define optimizer and loss_fn
     optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
@@ -161,8 +161,8 @@ def train(run_folder,model,train_data,valid_data,optimizer,loss_fn,corr_coef,dev
         train_par = tqdm(train_data, bar_format='{l_bar}{n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] {postfix}')
         total_loss = 0
         total_r = 0
-        corr_coef.reset()
         for idx, (seq,target) in enumerate(train_par):
+            corr_coef.reset()
             seq = seq.to(device).float().transpose(1, 2)
             target = target.to(device).transpose(1, 2)
             target = target_crop(target)
@@ -210,10 +210,10 @@ def evaluate(model,valid_data,loss_fn,corr_coef,device):
     target_crop = TargetLengthCrop(896)
     evaluate_loss = 0
     total_r = 0
-    corr_coef.reset()
     model.eval()
     with torch.no_grad():
         for idx, (seq,target) in enumerate(valid_data):
+            corr_coef.reset()
             seq = seq.to(device).float().transpose(1, 2)
             target = target.to(device).transpose(1, 2)
             target = target_crop(target)
