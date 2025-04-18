@@ -26,7 +26,7 @@ cd SUCCEED
 
 ### Step 2: Create Conda Environment
 ```shell
-conda create -n succeed python=3.11.2 basenji
+conda create -n succeed -c bioconda -c conda-forge python=3.11.2 basenji
 conda activate succeed
 ```
 
