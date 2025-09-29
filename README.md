@@ -1,7 +1,7 @@
 # SUCCEED
-SUCCEED is a systematic evaluation framework across five genomic tasks that confirms Enformer's reproducibility and versatility. SUCCEED demonstrates stable predictive performance across diverse datasets and resolutions, enhances cell-type-specific epigenetic modification predictions, improves chromatin accessibility data quality, and excels at predicting 3D chromatin interactions from limited scATAC-seq data. These findings establish a foundation for unified multi-omics computational analysis.
+SUCCEED is a supervised genomic pretraining framework. It demonstrates robust predictive performance across diverse datasets and resolutions, enhances the prediction of cell type–specific epigenetic modifications, improves the quality of chromatin accessibility data, and achieves superior accuracy in inferring three-dimensional chromatin interactions from limited scATAC-seq data. These results establish a foundation for unified multi-omic computational analysis.
 
-![Main Figure](figure/main.png)
+![Main Figure](Figure1.png)
 ## Table of Contents
 - [SUCCEED](#succeed)
   - [Installation](#installation)
