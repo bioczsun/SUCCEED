@@ -111,6 +111,7 @@ python src/preprocess/prepare_succeed_dataset.py \
 ```
 
 ### Fine-tuning a 524k-512bp model
+Note that manual adjustment of pooling stride is required.
 ```shell
 python src/training/train.py \
     --project_dir /home/hezj/projects/SUCCEED \
