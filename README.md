@@ -92,7 +92,7 @@ python src/training/train.py \
 ---
 
 ## 2. Fine-tuning on new dataset
-Next, we use the fully pre-trained 131k-128bp model on the complete dataset (6,389 targets) to fine-tune a new dataset with different resolution (we still use the small dataset with 5 targets for testing), using 524k-512bp as an example.
+Next, we use the fully pre-trained [131k-128bp model](https://drive.google.com/file/d/1oxs7fAf_UQyQifieRX6S8ONW9n0vBgrS/view?usp=drive_link) on the complete dataset (6,389 targets) to fine-tune a new dataset with different resolution (we still use the small dataset with 5 targets for testing), using 524k-512bp as an example.
 
 ### Download pre-trained model
 Coming soon
