@@ -1,7 +1,7 @@
 import os 
 import h5py
 from torch.utils.data import Dataset
-from data.chromsome_dataset import SequenceFeature, GenomicFeature
+from utils.chromsome_dataset import SequenceFeature, GenomicFeature
 import torch
 import numpy as np
 import random
@@ -53,7 +53,7 @@ class GenomeDataset(Dataset):
     
     def get_chr_names(self, assembly):
         '''
-        Get a list of all chr names. e.g. [chr1 , chr2, ...]
+        Get a list of all chromosome names. e.g. [chr1 , chr2, ...]
         '''
         print(f'Using Assembly: {assembly}')
         if assembly in ['hg38', 'hg19']:
@@ -70,7 +70,7 @@ class GenomeDataset(Dataset):
     
     def get_chr_data(self, feature_dir):
         '''
-        load features h5py file
+        Load features from h5py file
         '''
         features = h5py.File(feature_dir, 'r',swmr=True)
         if self.use_cache is False:
@@ -80,58 +80,54 @@ class GenomeDataset(Dataset):
         
         
 
-class EnformerDataset(Dataset):
+class PretrainDataset(Dataset):
     def __init__(self, data, augment=False):
-        self.sequence = data["sequence"]  # 原始数据为 (length, 4)
-        self.target = data["target"]
-        self.augment = augment  # 是否启用数据增强
+        self.sequence = data["sequences"]  # Original data shape (length, 4)
+        self.target = data["targets"]
+        self.augment = augment  # Whether to apply data augmentation
 
     def __len__(self):
         return len(self.sequence)
 
     def reverse_complement(self, seq):
-        # 反向互补：反转序列并交换A-T，C-G
+        # Reverse complement: reverse the sequence and swap A-T, C-G
         n, d = seq.shape
         assert d == 4, 'must be one hot encoding with last dimension equal to 4'
         return torch.flip(torch.Tensor(seq), (-1, -2))
 
     def random_base(self, length):
-        """生成随机的 one-hot 编码碱基序列"""
-        bases = np.eye(4)  # A, T, C, G 的 one-hot 编码
-        random_bases = np.random.choice(4, length)  # 随机选择碱基
-        return bases[random_bases]  # 生成形状 (length, 4)
+        """Generate random one-hot encoded base sequence"""
+        bases = np.eye(4)  # One-hot encoding of A, T, C, G
+        random_bases = np.random.choice(4, length)  # Randomly choose bases
+        return bases[random_bases]  # Shape (length, 4)
 
     def shift_sequence(self, seq, shift_amount):
-        """随机位移序列，并保持长度一致"""
+        """Randomly shift the sequence and keep the same length"""
 
         if shift_amount > 0:
-            # 右移，前面填充 shift_amount 个随机碱基，右边移除 shift_amount 个碱基
+            # Right shift: pad with random bases on the left, remove bases from the right
             random_bases = self.random_base(shift_amount)  # (shift_amount, 4)
-            # 截取从 0 到 seq_length - shift_amount 的序列部分
             shifted_seq = np.concatenate((random_bases, seq[:-shift_amount, :]), axis=0)
         else:
-            # 左移，后面填充 -shift_amount 个随机碱基，左边移除 -shift_amount 个碱基
-            random_bases = self.random_base(-shift_amount)  # (shift_amount, 4)
-            # 截取从 -shift_amount 到 seq_length 的序列部分
+            # Left shift: pad with random bases on the right, remove bases from the left
+            random_bases = self.random_base(-shift_amount)  # (-shift_amount, 4)
             shifted_seq = np.concatenate((seq[-shift_amount:, :], random_bases), axis=0)
-
-            
 
         return shifted_seq
 
     def __getitem__(self, idx):
-        seq = self.sequence[idx]  # 原始数据为 (length, 4)
+        seq = self.sequence[idx]  # Original sequence (length, 4)
         target = self.target[idx]
 
         if self.augment:
-            # 如果启用增强，返回三种不同形式的同一条数据
-            orig_seq = seq  # (2097512, 4)
-            rev_comp_seq = self.reverse_complement(seq)  # 反向互补，保持形状 (length, 4)
-            shift_amount = random.choice([-3, -2, -1, 1, 2, 3])  # 随机位移1-3个bp
-            shifted_seq = self.shift_sequence(seq, shift_amount)  # 位移后保持形状 (length, 4)
+            # If augmentation enabled, return three different variations of the same data
+            orig_seq = seq  
+            rev_comp_seq = self.reverse_complement(seq)  # Reverse complement, shape (length, 4)
+            shift_amount = random.choice([-3, -2, -1, 1, 2, 3])  # Random shift by 1–3 bp
+            shifted_seq = self.shift_sequence(seq, shift_amount)  # Keep same shape
             return torch.Tensor(orig_seq), torch.Tensor(rev_comp_seq), torch.Tensor(shifted_seq), torch.Tensor(target)
         else:
-            # 如果不启用增强，直接返回原始序列和目标
+            # If no augmentation, return original sequence and target
             return torch.Tensor(seq), torch.Tensor(target)
         
 
@@ -208,7 +204,7 @@ class HistonTFDataset(Dataset):
     
     def get_chr_names(self, assembly):
         '''
-        Get a list of all chr names. e.g. [chr1 , chr2, ...]
+        Get a list of all chromosome names. e.g. [chr1 , chr2, ...]
         '''
         print(f'Using Assembly: {assembly}')
         if assembly in ['hg38', 'hg19']:
@@ -225,7 +221,7 @@ class HistonTFDataset(Dataset):
     
     def get_chr_data(self, feature_dir):
         '''
-        load features h5py file
+        Load features from h5py file
         '''
         features = h5py.File(feature_dir, 'r',swmr=True)
         if self.use_cache is False:
@@ -246,9 +242,6 @@ class HistonTFDataset(Dataset):
         for feat_item in feat_dicts:
             file_name = feat_item
             file_path = f'{root_dir}/{file_name}'
-            norm = None#"log"
+            norm = None #"log"
             feat_list[file_name.split('.')[0]] = GenomicFeature(file_path, norm)
         return feat_list
-        
-
-    

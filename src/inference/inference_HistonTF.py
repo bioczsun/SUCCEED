@@ -54,7 +54,7 @@ import yaml
 from data.GenomeDataset import EnformerDataset, HistonTFDataset
 from model.HistonTF import HistonTF
 from training.metric import MeanPearsonCorrCoefPerChannel
-from model.blocks import TargetLengthCrop
+from model.blocks0 import TargetLengthCrop
 
 from model.config import ModelArgs
 

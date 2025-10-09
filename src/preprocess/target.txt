@@ -1,6 +1,0 @@
-index	genome	identifier	file	clip	scale	sum_stat
-0	1	ENCFF309HRY	data/training/ENCFF309HRY.bigWig	32	2	mean
-1	1	ENCFF070LJH	data/training/ENCFF070LJH.bigWig	32	2	mean
-2	1	ENCFF931BVK	data/training/ENCFF931BVK.bigWig	32	2	mean
-3	1	ENCFF622NVF	data/training/ENCFF622NVF.bigWig	32	2	mean
-4	1	ENCFF279WFR	data/training/ENCFF279WFR.bigWig	32	2	mean

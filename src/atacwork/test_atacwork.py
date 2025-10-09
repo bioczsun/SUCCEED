@@ -44,7 +44,7 @@ import numpy as np
 from tqdm import tqdm
 import os
 
-from model.Enformer import Enformer
+from model.layers import Enformer
 from model.config import ModelArgs
 from training.metric import compute_rowwise_pearson
 import atacwork

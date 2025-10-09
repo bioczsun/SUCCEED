@@ -8,7 +8,7 @@ class ModelArgs:
         dim: int = 256,  # dimension of the model
         num_heads: int = 8,  # number of heads
         n_kv_heads: int = 8,  # number of key-value heads
-        output_heads = dict(human = 1063),  # number of output heads
+        output_heads = dict(human = 6389),  # number of output heads
         # output_heads = dict(human = 6389),  # number of output heads
         depth: int = 11,  # depth of the model
         multiple_of: int = 512,  # dimension of feedforward network

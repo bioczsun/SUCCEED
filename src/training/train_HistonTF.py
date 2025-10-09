@@ -63,7 +63,7 @@ from torch.optim.lr_scheduler import LambdaLR
 from data.GenomeDataset import GenomeDataset, EnformerDataset, HistonTFDataset
 from model.HistonTF import HistonTF
 from training.metric import MeanPearsonCorrCoefPerChannel, EarlyStopping
-from model.blocks import TargetLengthCrop
+from model.blocks0 import TargetLengthCrop
 
 from model.config import ModelArgs
 

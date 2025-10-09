@@ -55,7 +55,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from model.Enformer import Enformer
+from model.layers import Enformer
 from model.config import ModelArgs
 from training.metric import EarlyStopping, compute_rowwise_pearson
 import atacwork

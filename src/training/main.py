@@ -9,12 +9,12 @@ import pandas as pd
 import numpy as np
 
 import sys
-sys.path.append("/home/suncz/work/s02/Encode_epigenome/results/Enformer/src")
+sys.path.append("/home/suncz/work/s02/SUCCEED/src")
 
-from data.GenomeDataset import GenomeDataset
-from Enformer.src.abandon.enformer import Enformer
-from Enformer.src.model.Enformer import EpiModel
-from model.blocks import TargetLengthCrop
+from utils.GenomeDataset import GenomeDataset
+from model.layers import SUCCEED
+from model.config import ModelArgs
+from model.blocks0 import TargetLengthCrop
 from training.metric import MeanPearsonCorrCoefPerChannel
 
 run_save_path = '/home/suncz/work/s02/Encode_epigenome/results/preprocessed/131k/model'
@@ -41,7 +41,7 @@ all_loggers = csv_logger
 
 # Assign seed
 pl.seed_everything(run_seed, workers=True)
-contig_bed = pd.read_csv("/home/suncz/work/s02/Encode_epigenome/results/preprocessed/131k/sequences.bed", sep="\t", header=None)
+contig_bed = pd.read_csv("/home/suncz/work/s02/Encode_epigenome/results/preprocessed/131k-Basenji/human/sequences.bed", sep="\t", header=None)
 contig_bed.columns = ["chrom", "start", "end","label"]
 seq_dir = "/home/suncz/work/s02/Encode_epigenome/results/downstream/C.Origami/corigami_data/data/hg38/sc_imr90_gm12878/dna_sequence"
 
@@ -104,7 +104,8 @@ class TrainModule(pl.LightningModule):
     
     def __init__(self):
         super().__init__()
-        self.model = Enformer(dim=256, num_heads=8, n_kv_heads=8, max_seq_len=1024, num_layers=11)#EpiModel(ModelArgs(device="cuda"))
+        self.model =  SUCCEED(ModelArgs(
+    ))#EpiModel(ModelArgs(device="cuda"))
         #
         self.save_hyperparameters()
 

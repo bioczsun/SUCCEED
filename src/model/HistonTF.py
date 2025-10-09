@@ -1,6 +1,6 @@
 import sys
 sys.path.append("/home/suncz/work/s02/Encode_epigenome/results/Enformer/src")
-from model.Enformer import Enformer,exponential_linspace_int,TransformerBlock,TargetLengthCrop
+from model.layers import Enformer,exponential_linspace_int,TransformerBlock,TargetLengthCrop
 
 import torch
 import torch.nn as nn

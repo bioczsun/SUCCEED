@@ -14,9 +14,9 @@ import sys
 sys.path.append("/home/suncz/work/s02/Encode_epigenome/results/Enformer/src")
 
 from data.GenomeDataset import EnformerDataset
-from model.Enformer import Enformer
+from model.layers import Enformer
 from training.metric import MeanPearsonCorrCoefPerChannel
-from model.blocks import TargetLengthCrop
+from model.blocks0 import TargetLengthCrop
 
 from model.config import ModelArgs
 config_args = ModelArgs()
