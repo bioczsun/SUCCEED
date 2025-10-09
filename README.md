@@ -1,7 +1,7 @@
 # SUCCEED
 SUCCEED is a supervised genomic pretraining framework. It demonstrates robust predictive performance across diverse datasets and resolutions, enhances the prediction of cell type–specific epigenetic modifications, improves the quality of chromatin accessibility data, and achieves superior accuracy in inferring three-dimensional chromatin interactions from limited scATAC-seq data. These results establish a foundation for unified multi-omic computational analysis.
 
-![Main Figure](Figure1.png)
+![Main Figure](main.png)
 ## Table of Contents
 - [SUCCEED](#succeed)
   - [Installation](#installation)
