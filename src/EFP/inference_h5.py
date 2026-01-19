@@ -36,7 +36,14 @@ from tqdm import tqdm
 # =========================
 import models
 import sys
-sys.path.append('/home/suncz/work/s02/SUCCEED/src')
+from pathlib import Path
+
+# Ensure `src/` is on sys.path so `import hic...` works when running this file directly.
+# File location: <repo>/src/hic/inference/prediction.py
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_SRC_DIR = _REPO_ROOT / "src"
+if _SRC_DIR.is_dir() and str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
 from pretrain import layers
 from pretrain.config import ModelArgs as SucceedArgs
 from config import ModelArgs as EPCOTArgs

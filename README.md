@@ -82,8 +82,8 @@ python src/preprocess/prepare_succeed_dataset.py \
 
 ### Pre-training a 131k-128bp model
 ```shell
-python src/training/train.py \
-    --project_dir /home/hezj/projects/SUCCEED \
+python ~/SUCCEED/src/pretrain/train.py \
+    --project_dir ~/SUCCEED \
     --output_head_size 5 \
     --td result/training/131k-128/train_all.h5 \
     --vd result/training/131k-128/valid_all.h5 \
@@ -104,11 +104,11 @@ The resolution is equal to length / 1024.
 
 ### Data Preparation
 ```shell
-python src/preprocess/basenji_data.py -s 1 -g data/hg38_gap.bed \
+python  ~/SUCCEED/src/preprocess/basenji_data.py -s 1 -g data/hg38_gap.bed \
     --break 7864320 -l 524288 --local -o "result/training/524k-512" -p 48 -t .1 -v .1 -w 512 \
     -b data/hg38-blacklist.v2.bed data/hg38.fa src/preprocess/target.txt
 
-python src/preprocess/prepare_succeed_dataset.py \
+python ~/SUCCEED/src/preprocess/prepare_succeed_dataset.py \
     --fasta data/hg38.fa \
     --bed result/training/524k-512/sequences.bed \
     --num_targets 5 \
@@ -118,8 +118,8 @@ python src/preprocess/prepare_succeed_dataset.py \
 ### Fine-tuning a 524k-512bp model
 Note that manual adjustment of pooling stride is required.
 ```shell
-python src/training/train.py \
-    --project_dir /home/hezj/projects/SUCCEED \
+python ~/SUCCEED/src/pretrain/train.py \
+    --project_dir ~/SUCCEED \
     --output_head_size 5 \
     --td result/training/524k-512/train_all.h5 \
     --vd result/training/524k-512/valid_all.h5 \
@@ -177,57 +177,43 @@ python src/training/train.py \
 ### Fine-tuning for EFP task
 ```shell
 # Training on 4 ATAC-seq datasets (Optional)
-python src/training/train_HistonTF.py \
-    --project_dir /home/hezj/projects/SUCCEED \
-    --use_pth data/model/1M_best_network.pth \
-    --seed 1401 \
-    --lr 0.001 \
-    --batch 8 \
-    --seq_dir data/dna_sequence \
-    --train_feature_dir data/EFP/train_target.h5 \
-    --valid_feature_dir data/EFP/valid_target.h5 \
-    --train_contig_bed data/EFP/train_bed.npy \
-    --valid_contig_bed data/EFP/valid_bed.npy \
-    --atac_path data/EFP/atac \
-    --atac_dict "GM12878.bigWig,HepG2.bigWig,K562.bigWig,MCF-7.bigWig" \
-    --name HistonTF \
-    --output_head_size 46 \
-    --genome_assembly hg38 \
-    --out_dir result/EFP/4-cells/model
-```
-
-### Testing on the test set
-```shell
-python src/inference/prediction_HistonTF.py \
-    --project_dir /home/hezj/projects/SUCCEED \
-    --use_pth data/model/1M_best_network.pth \
-    --model data/model/HistonTF_best_network.pth \
-    --seed 1401 \
-    --batch 8 \
-    --seq_dir data/dna_sequence \
-    --feature_dir data/EFP/test_target.h5 \
-    --contig_bed data/EFP/test_bed.npy  \
-    --atac_path data/EFP/atac \
-    --atac_dict "GM12878.bigWig,HepG2.bigWig,K562.bigWig,MCF-7.bigWig" \
-    --name HistonTF \
-    --out_dir result/EFP/4-cells/model/csv/logs/version_0
+python ~/SUCCEED/src/EFP/train_HistonTF.py \
+  --project_dir ~/SUCCEED \
+  --fasta hg38.fa \
+  --bed /1M_sequences.bed \
+  --h5_dir /h5 \
+  --bw_dir /bw \
+  --keys "GM12878,HepG2,K562,MCF-7" \
+  --train_target_key train_target \
+  --test_target_key test_target \
+  --index_key index \
+  --test_chroms "chr2,chr10,chr21" \
+  --seed 1401 \
+  --device cuda:0 \
+  --batch_size 12 \
+  --num_workers 10 \
+  --lr 1e-4 \
+  --epochs 200 \
+  --patience 3 \
+  --out_dir /outpath \
+  --run_name ATAC_RPGC_4_ALL_Poisson \
+  --succeed_ckpt SUCCEED_1M_best_network.pth
 ```
 
 ### Inference on the new dataset
 ```shell
 # You can substitute the contig_bed with your own dataset
-python src/inference/inference_HistonTF.py \
-    --project_dir /home/hezj/projects/SUCCEED \
-    --use_pth data/model/1M_best_network.pth \
-    --model data/model/HistonTF_best_network.pth \
-    --seed 1401 \
-    --batch 8 \
-    --seq_dir data/dna_sequence \
-    --atac_path data/EFP/atac \
-    --atac_dict "A549.bigWig" \
-    --name A549 \
-    --contig_bed data/EFP/1m_epcot_sequences.bed  \
-    --out_dir result/EFP/4-cells/model/csv/logs/version_0
+python ~/SUCCEED/src/EFP/inference_h5.py \
+  --fasta /home/suncz/genome_index/mm10/mm10.fa \
+  --atac_bw ENCFF155RBY_lung_RPGC.bigwig \
+  --succeed_ckpt SUCCEED_1M_best_network.pth \
+  --epcot_ckpt ATAC_RPGC_4_ALL_Poisson_Pvalue_23_best_network.pth \
+  --head_name human \
+  --out_channels 46 \
+  --out_h5 mm10_ENCFF155RBY_lung_131072.h5 \
+  --batch_size 1 \
+  --device cuda:0 \
+  --num_workers 8
 ```
 
 ---
@@ -239,28 +225,33 @@ python src/inference/inference_HistonTF.py \
 #### Bulk Dataset
 ```shell
 # Training dataset on 4 cell types
-for cell_type in "CD8-10" "Bcell-13" "CD4-9" "Nkcell-11"; do
-    python src/atacwork/atacwork_data.py \
-        --out_dir result/denoise/bulk/$cell_type \
-        --clean_file data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/train_data/clean_data/$cell_type.50000000.1.cutsites.smoothed.200.bw \
-        --noisy_file data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/train_data/noisy_data/$cell_type.200000.2.cutsites.smoothed.200.bw \
-        --peak_file data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/train_data/clean_data/$cell_type.50000000.1.cutsites.smoothed.200.3.narrowPeak \
-        --fasta_file data/hg19.fa \
-        --gaps_file data/hg19_gaps.bed \
-        --name "$cell_type" \
-        --restart
-done
+  python ~/SUCCEED/src/atacwork/train_denoising.py \
+    --project-dir ~/SUCCEED \
+    --sequence-bed ~/Basenji2/downstream/ATACwork/data/data/200000/sequence.bed \
+    --fasta /home/suncz/genome_index/hg19/hg19.fa \
+    --model-ckpt ~/SUCCEED/data/model_pth/SUCCEED_131k_best_network.pth \
+    --outpath ~/benchmark/AtacWorks/model \
+    --device cuda:0 \
+    --res 200000 \
+    --seed 1401 \
+    --batch-size 64 \
+    --epochs 200 \
+    --num-workers 8 \
+    --cell-type-spec CD8-10,/noisy_data/CD8-10.200000.2.cutsites.smoothed.200.bw,/clean_data/CD8-10.50000000.1.cutsites.smoothed.200.bw,/clean_data/CD8-10.50000000.1.cutsites.smoothed.200.3.narrowPeak \
+    --cell-type-spec Bcell-13,/noisy_data/Bcell-13.200000.2.cutsites.smoothed.200.bw,/clean_data/Bcell-13.50000000.1.cutsites.smoothed.200.bw,/clean_data/Bcell-13.50000000.1.cutsites.smoothed.200.3.narrowPeak \
+    --cell-type-spec CD4-9,/noisy_data/CD4-9.200000.2.cutsites.smoothed.200.bw,/clean_data/CD4-9.50000000.1.cutsites.smoothed.200.bw,/clean_data/CD4-9.50000000.1.cutsites.smoothed.200.3.narrowPeak \
+    --cell-type-spec Nkcell-11,/noisy_data/Nkcell-11.200000.2.cutsites.smoothed.200.bw,/clean_data/Nkcell-11.50000000.1.cutsites.smoothed.200.bw,/clean_data/Nkcell-11.50000000.1.cutsites.smoothed.200.3.narrowPeak
+
 
 # Test dataset on erythroid
-python src/atacwork/atacwork_data.py \
-    --out_dir result/denoise/bulk/Erythro-15 \
-    --clean_file data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/clean_data/Erythro-15.50000000.1.cutsites.smoothed.200.bw \
-    --noisy_file data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/noisy_data/Erythro-15.200000.2.cutsites.smoothed.200.bw \
-    --peak_file data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/clean_data/Erythro-15.50000000.1.cutsites.smoothed.200.3.narrowPeak \
-    --fasta_file data/hg19.fa \
-    --gaps_file data/hg19_gaps.bed \
-    --name "Erythro-15" \
-    --restart
+python ~/SUCCEED/src/atacwork/inference_succeed.py \
+--fasta ~/genome_index/hg19/hg19.fa \
+--sequence_bed ~/Basenji2/downstream/ATACwork/data/data/200000/sequence.bed \
+--model ~/benchmark/AtacWorks/SUCCEED_200000_best_network.pth \
+--model_epi ~/Encode_epigenome/results/preprocessed/131k-Basenji/human/model/131k_corr_weight_10.10.1_best_network.pth \
+--noisy_bw ~/test/AtacWorks/data/atacworks-paper/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/noisy_data/Erythro-15.200000.2.cutsites.smoothed.200.bw \
+--outpath ~/benchmark/AtacWorks/LLM_Results/200000/ \
+--chrom_size ~/genome_index/hg19/hg19.chrom.sizes
 
 # Make peaks label bigwig file
 tail -n +2 data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/clean_data/Erythro-15.50000000.1.cutsites.smoothed.200.3.narrowPeak | awk -F'\t' '{print $1 "\t" $2 "\t" $3 "\t" 1}' > data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/clean_data/peaks.bed
@@ -269,134 +260,7 @@ bedGraphToBigWig data/denoise/bulk_blood_cell_denoising_experiments/200000_reads
 ```
 
 #### Single-cell Dataset
-```shell
-# Training dataset on 2 cell types. Test dataset on NK
-
-# Bcells
-for i in $(seq 1 5); do
-    python src/atacwork/atacwork_data_sc.py \
-        --out_dir result/denoise/sc/Bcells \
-        --clean_file data/denoise/self-dsc_blood_cell/Bcells/dsc.CD19.cutsites.clean1.bw \
-        --noisy_file data/denoise/self-dsc_blood_cell/Bcells/50cells/noisy/dsc.CD19.cutsites.$i.noisy$i.bw \
-        --peak_file data/denoise/self-dsc_blood_cell/Bcells/dsc.CD19.cutsites.clean.narrowPeak \
-        --fasta_file data/hg19.fa \
-        --gaps_file data/hg19_gaps.bed \
-        --name "Bcells_$i" \
-        --restart
-done
-
-# Mono
-for i in $(seq 1 5); do
-    python src/atacwork/atacwork_data_sc.py \
-        --out_dir result/denoise/sc/Mono \
-        --clean_file data/denoise/self-dsc_blood_cell/Mono/dsc.mono.cutsites.clean1.bw \
-        --noisy_file data/denoise/self-dsc_blood_cell/Mono/50cells/noisy/dsc.mono.cutsites.$i.noisy$i.bw \
-        --peak_file data/denoise/self-dsc_blood_cell/Mono/dsc.mono.cutsites.clean.narrowPeak \
-        --fasta_file data/hg19.fa \
-        --gaps_file data/hg19_gaps.bed \
-        --name "Mono_$i" \
-        --restart
-done
-
-# NK
-for i in $(seq 1 5); do
-    python src/atacwork/atacwork_data_sc.py \
-        --out_dir result/denoise/sc/NK \
-        --clean_file data/denoise/self-dsc_blood_cell/NK/dsc.NK.cutsites.clean1.bw \
-        --noisy_file data/denoise/self-dsc_blood_cell/NK/50cells/noisy/dsc.NK.cutsites.$i.noisy$i.bw \
-        --peak_file data/denoise/self-dsc_blood_cell/NK/dsc.NK.cutsites.clean.narrowPeak \
-        --fasta_file data/hg19.fa \
-        --gaps_file data/hg19_gaps.bed \
-        --name "NK_$i" \
-        --restart
-done
-```
-
-### Fine-tuning
-
-#### Bulk Dataset
-```shell
-# Training on 4 cell types (Optional)
-python src/atacwork/train_atacwork.py \
-    --project_dir /home/hezj/projects/SUCCEED \
-    --name ATACwork \
-    --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
-    --batch 64 \
-    --lr 0.0001 \
-    --dataset_dir result/denoise/bulk \
-    --outpath result/denoise/bulk/train_model/ \
-    --cell_types "CD8-10" "Bcell-13" "CD4-9" "Nkcell-11"
-
-# Testing on erythroid
-python src/atacwork/test_atacwork.py \
-    --project_dir /home/hezj/projects/SUCCEED \
-    --name test_result \
-    --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
-    --model data/model/ATACwork_200000_best_network.pth \
-    --batch 64 \
-    --dataset_dir result/denoise/bulk \
-    --outpath result/denoise/bulk/test_results/ \
-    --cell_types "Erythro-15"
-```
-
-#### Single-cell Dataset
-```shell
-# Training on 2 cell types (Optional)
-python src/atacwork/train_atacwork.py \
-    --project_dir /home/hezj/projects/SUCCEED \
-    --name ATACwork \
-    --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
-    --batch 64 \
-    --lr 0.0001 \
-    --dataset_dir result/denoise/sc \
-    --outpath result/denoise/sc/train_model/ \
-    --cell_types "Bcells" "Mono"
-
-# Testing on NK
-python src/atacwork/test_atacwork.py \
-    --project_dir /home/hezj/projects/SUCCEED \
-    --name test_result \
-    --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
-    --model data/model/ATACwork_max_50_best_network.pth \
-    --batch 64 \
-    --dataset_dir result/denoise/sc \
-    --outpath result/denoise/sc/test_results/ \
-    --cell_types "NK"
-```
-
-### Inference on the new dataset
-
-#### Bulk Dataset
-```shell
-python src/atacwork/inference_atacwork.py \
-    --project_dir /home/hezj/projects/SUCCEED \
-    --fasta data/hg19.fa \
-    --model data/model/ATACwork_200000_best_network.pth \
-    --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
-    --noisy_file data/denoise/bulk_blood_cell_denoising_experiments/200000_reads/test_data/erythroid_test_data/noisy_data/Erythro-15.200000.2.cutsites.smoothed.200.bw \
-    --gaps_file data/hg19_gaps.bed \
-    --name "erythroid_whole" \
-    --outpath result/denoise/bulk/test_results/ \
-    --limit_chrom all \
-    --chrom_size data/hg19.chrom.sizes
-```
-
-#### Single-cell Dataset
-```shell
-for i in $(seq 1 5); do
-    python src/atacwork/inference_atacwork.py \
-        --project_dir /home/hezj/projects/SUCCEED \
-        --fasta data/hg19.fa \
-        --model data/model/ATACwork_max_50_best_network.pth \
-        --use_pth data/model/131k_corr_weight_10.10.1_best_network.pth \
-        --noisy_file data/denoise/self-dsc_blood_cell/NK/50cells/noisy/dsc.NK.cutsites.$i.noisy$i.bw \
-        --gaps_file data/hg19_gaps.bed \
-        --name "NK_${i}_whole" \
-        --outpath result/denoise/sc/test_results/ \
-        --limit_chrom all \
-        --chrom_size data/hg19.chrom.sizes
-done
-```
+The process is similar to the bulk dataset. Please refer to the bulk dataset preparation for details.
 
 ---
 
@@ -414,28 +278,28 @@ Using the IMR-90 cell line as an example, we need to prepare four types of data 
 
 #### DNA sequence
 ```shell
-mkdir -p result/3d_genome/data/hg38/dna_sequence
-cp data/centrotelo.bed result/3d_genome/data/hg38
+mkdir -p result/hic/data/hg38/dna_sequence
+cp data/centrotelo.bed result/hic/data/hg38
 
 CHROMS=$(seq 1 22 | awk '{print "chr"$0}'; echo "chrX"; echo "chrY")
 
 for chrom in ${CHROMS}; do
-  samtools faidx data/hg38.fa "${chrom}" | gzip > "result/3d_genome/data/hg38/dna_sequence/${chrom}.fa.gz"
+  samtools faidx data/hg38.fa "${chrom}" | gzip > "result/hic/data/hg38/dna_sequence/${chrom}.fa.gz"
 done
 ```
 
 #### Hi-C
 ```shell
-mkdir -p result/3d_genome/data/hg38/IMR-90
+mkdir -p result/hic/data/hg38/IMR-90
 
 # Download Hi-C data
-wget -O result/3d_genome/data/hg38/IMR-90/IMR-90_HiC.mcool https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/b4939d95-4121-4f86-9cc8-29a34eb834ef/4DNFIJTOIGOI.mcool
+wget -O result/hic/data/hg38/IMR-90/IMR-90_HiC.mcool https://4dn-open-data-public.s3.amazonaws.com/fourfront-webprod/wfoutput/b4939d95-4121-4f86-9cc8-29a34eb834ef/4DNFIJTOIGOI.mcool
 
 # Convert cool to npy
-python -u src/corigami/preprocessing/cool2npy.py \
+python -u src/hic/preprocessing/cool2npy.py \
     --no-balance \
-    result/3d_genome/data/hg38/IMR-90/IMR-90_HiC.mcool::/resolutions/10000 \
-    result/3d_genome/data/hg38/IMR-90/hic_matrix
+    result/hic/data/hg38/IMR-90/IMR-90_HiC.mcool::/resolutions/10000 \
+    result/hic/data/hg38/IMR-90/hic_matrix
 ```
 
 #### ATAC-seq
@@ -467,8 +331,8 @@ python src/preprocess/prepare_succeed_dataset.py \
     --num_targets 5 \
     --output_dir result/training/2m-8192
 
-python src/training/train.py \
-    --project_dir /home/hezj/projects/SUCCEED \
+python src/pretrain/train.py \
+    --project_dir ~/SUCCEED \
     --output_head_size 5 \
     --td result/training/2m-8192/train_all.h5 \
     --vd result/training/2m-8192/valid_all.h5 \
@@ -495,40 +359,17 @@ pip install lightning-bolts==0.7.0
 
 ##### Bulk dataset
 ```shell
-python src/3d_genome/bulk/corigami/training/main.py \
-    --project_dir /home/hezj/projects/SUCCEED \
-    --use_pth data/model/2m_131k_corr_weight_best_network.pth \
-    --seed 2077 \
-    --save_path result/3d_genome/training/IMR-90_bulk \
-    --data-root result/3d_genome/data \
-    --assembly hg38 \
-    --celltype IMR-90 \
-    --model-type ConvTransModel \
-    --patience 80 \
-    --max-epochs 80 \
-    --save-top-n 20 \
-    --num-gpu 0 \
-    --batch-size 4 \
-    --num-workers 16
+python ~/SUCCEED/src/hic/training/main_alter.py \
+  --project-dir ~/SUCCEED \
+  --data-root ~/data/hg38 \
+  --assembly hg38 \
+  --celltype imr90 \
+  --save_path outpath/ \
+  --seed 1401 \
+  --num-gpu 2 \
+  --use-succeed-seq-model \
+  --succeed-ckpt ~/SUCCEED/data/model_pth/SUCCEED_2M_best_network.pth
 ```
 
 ##### Single-cell dataset
-```shell
-cp -r data/3d_genome/IMR-90_sc result/3d_genome/data/hg38 # Copy preprocessed data
-
-python src/3d_genome/sc/corigami/training/main.py \
-    --project_dir /home/hezj/projects/SUCCEED \
-    --use_pth data/model/2m_131k_corr_weight_best_network.pth \
-    --seed 2077 \
-    --save_path result/3d_genome/training/IMR-90_sc \
-    --data-root result/3d_genome/data \
-    --assembly hg38 \
-    --celltype IMR-90_sc \
-    --model-type ConvTransModel \
-    --patience 80 \
-    --max-epochs 80 \
-    --save-top-n 20 \
-    --num-gpu 0 \
-    --batch-size 4 \
-    --num-workers 16
-```
+The process is similar to the bulk dataset. Please refer to the bulk dataset preparation for details.
