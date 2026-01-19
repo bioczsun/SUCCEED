@@ -373,3 +373,7 @@ python ~/SUCCEED/src/hic/training/main_alter.py \
 
 ##### Single-cell dataset
 The process is similar to the bulk dataset. Please refer to the bulk dataset preparation for details.
+
+
+### All model .pth files and data used in the above examples can be found here:
+https://drive.google.com/drive/folders/1wNIeZ9o5yW-bpPdHB7Ke0_O2q2ssthd9?usp=sharing
