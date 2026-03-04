@@ -1,4 +1,4 @@
-[https://doi.org/10.5281/zenodo.18857226](https://doi.org/10.5281/zenodo.18857226)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.18857226.svg)](https://doi.org/10.5281/zenodo.18857226)
 # SUCCEED
 SUCCEED is a supervised genomic pretraining framework. It demonstrates robust predictive performance across diverse datasets and resolutions, enhances the prediction of cell type–specific epigenetic modifications, improves the quality of chromatin accessibility data, and achieves superior accuracy in inferring three-dimensional chromatin interactions from limited scATAC-seq data. These results establish a foundation for unified multi-omic computational analysis.
 
