@@ -5,7 +5,7 @@
 ## Citation
 If you use SUCCEED in your research, please cite:
 
-Sun C Z, He Z J, Zhang S F. *Large-scale data-driven pre-trained DNA models enhance performance across diverse genomics tasks* [J]. **Nature Communications**, 2026.
+CanZhuang Sun<sup>†</sup>, ZhiJie He<sup>†</sup>, MingZhi Liao<sup>*</sup>, XiaoChen Bo<sup>*</sup>, Hebing Chen<sup>*</sup>. Large-scale data-driven pre-trained DNA models enhance performance across diverse genomics tasks [J]. Nature Communications, Accept, 2026.
 
 SUCCEED is a supervised genomic pretraining framework. It demonstrates robust predictive performance across diverse datasets and resolutions, enhances the prediction of cell type–specific epigenetic modifications, improves the quality of chromatin accessibility data, and achieves superior accuracy in inferring three-dimensional chromatin interactions from limited scATAC-seq data. These results establish a foundation for unified multi-omic computational analysis.
 
