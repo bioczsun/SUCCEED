@@ -161,6 +161,7 @@ python src/preprocess/prepare_succeed_dataset.py \
 
 #### Step 2: Prepare EFP Dataset
 ```shell
+# Prepare DNA data
 mkdir -p data/dna_sequence
 
 CHROMS=$(seq 1 22 | awk '{print "chr"$0}'; echo "chrX"; echo "chrY")
@@ -169,7 +170,10 @@ for chrom in ${CHROMS}; do
   samtools faidx data/hg38.fa "${chrom}" | gzip > "data/dna_sequence/${chrom}.fa.gz"
 done
 
-# The rest of the code will be available soon
+
+# Prepare ATAC-seq RPGC BigWig
+bamCoverage --bam ENCFF899WFS.bam -o ENCFF899WFS_A549.bigWig --outFileFormat bigwig --normalizeUsing RPGC --effectiveGenomeSize 2559804523 --Offset 1 --binSize 1 --numberOfProcessors 24 --skipNonCoveredRegions
+
 ```
 
 ### Pre-training a 1M-1024bp model
