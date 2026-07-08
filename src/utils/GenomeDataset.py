@@ -137,8 +137,8 @@ class GenomeDataset(Dataset):
 
 class PretrainDataset(Dataset):
     def __init__(self, data, augment=False):
-        self.sequence = data["sequence"]  # Original data shape (length, 4)
-        self.target = data["target"]
+        self.sequence = data["sequences"]  # Original data shape (length, 4)
+        self.target = data["targets"]
         self.augment = augment  # Whether to apply data augmentation
         self.epoch = 0
 

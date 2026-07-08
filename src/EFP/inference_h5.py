@@ -40,14 +40,15 @@ from pathlib import Path
 
 # Ensure `src/` is on sys.path so `import hic...` works when running this file directly.
 # File location: <repo>/src/hic/inference/prediction.py
-_REPO_ROOT = Path(__file__).resolve().parents[3]
-_SRC_DIR = _REPO_ROOT / "src"
+_SRC_DIR = Path(__file__).resolve().parents[1]
+
 if _SRC_DIR.is_dir() and str(_SRC_DIR) not in sys.path:
     sys.path.insert(0, str(_SRC_DIR))
+import models
 from pretrain import layers
 from pretrain.config import ModelArgs as SucceedArgs
 from config import ModelArgs as EPCOTArgs
-from utils import dna_1hot
+from utils.GenomeDataset import dna_1hot
 
 
 # =========================
@@ -195,6 +196,7 @@ def load_succeed(ckpt_path: str, device: str):
 
     ckpt = torch.load(ckpt_path, map_location="cpu")
     state = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
+    state = {k: v for k, v in state.items() if not k.startswith("_heads.")}
     model.load_state_dict(state, strict=False)
 
     for p in model.parameters():
@@ -209,7 +211,7 @@ def load_epcot(ckpt_path: str, device: str, out_channels: int, head_name: str):
     e_args.device = device
     e_args.output_heads = {head_name: out_channels}
 
-    model = models.EPCOT(e_args).to(device)
+    model = models.SUCCEED_EPI(e_args).to(device)
     ckpt = torch.load(ckpt_path, map_location=device)
     state = ckpt["model_state_dict"] if isinstance(ckpt, dict) and "model_state_dict" in ckpt else ckpt
     model.load_state_dict(state, strict=True)
