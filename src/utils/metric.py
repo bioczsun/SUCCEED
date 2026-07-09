@@ -123,7 +123,7 @@ class EarlyStopping():
             print(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
         path = os.path.join(self.save_path, '%s_best_network.pth'%self.model_name)
         torch.save({
-            'model_state_dict': model.state_dict(),
+            'model_state_dict': (model.module if hasattr(model, "module") else model).state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'val_loss': val_loss,
             }, path)

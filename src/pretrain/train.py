@@ -63,6 +63,14 @@ def evaluate(model, valid_data, loss_fn, corr_coef, target_crop, device):
     return avg_loss, avg_pearson_r
 
 
+def strip_module_prefix(state_dict):
+    if not state_dict:
+        return state_dict
+    if not all(k.startswith("module.") for k in state_dict):
+        return state_dict
+    return {k[len("module."):]: v for k, v in state_dict.items()}
+
+
 def train(run_folder, model, train_data, valid_data, optimizer, loss_fn, corr_coef, target_crop, device, epochs, early_stopping):
     metrics_path = os.path.join(run_folder, "metrics.csv")
     if not os.path.exists(metrics_path):
@@ -189,10 +197,14 @@ def main():
     if args.use_pth:
         checkpoint_obj = torch.load(args.use_pth, map_location="cpu")
         state_dict = checkpoint_obj.get("model_state_dict", checkpoint_obj)
+        state_dict = strip_module_prefix(state_dict)
         filtered_state_dict = {k: v for k, v in state_dict.items() if not k.startswith("_heads.")}
         model.load_state_dict(filtered_state_dict, strict=False)
 
     model.to(device)
+    if torch.cuda.device_count() > 1 and device.startswith("cuda"):
+        print(f"Using {torch.cuda.device_count()} GPUs with torch.nn.DataParallel")
+        model = nn.DataParallel(model)
 
     optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
     loss_fn = nn.PoissonNLLLoss(log_input=False)

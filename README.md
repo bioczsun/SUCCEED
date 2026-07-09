@@ -216,7 +216,7 @@ python ~/SUCCEED/src/EFP/train_HistonTF.py \
 ### Inference on the new dataset
 ```shell
 # You can substitute the contig_bed with your own dataset
-python ~/SUCCEED/src/EFP/inference_h5.py \
+python ~/SUCCEED/src/EFP/inference_genome.py \
   --fasta /home/suncz/genome_index/mm10/mm10.fa \
   --atac_bw ENCFF155RBY_lung_RPGC.bigwig \
   --succeed_ckpt SUCCEED_1M_best_network.pth \

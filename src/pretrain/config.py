@@ -33,7 +33,7 @@ class ModelArgs:
         self.pool_windows = pool_windows
         self.avg_pool = avg_pool
         # Avoid mutable default args (dict) being shared across instances.
-        self.output_heads = output_heads if output_heads is not None else {"human": 6389}
+        self.output_heads = output_heads if output_heads is not None else {"human": 5421}
         self.depth = depth
         self.multiple_of = multiple_of
         self.ffn_dim_multiplier = ffn_dim_multiplier
